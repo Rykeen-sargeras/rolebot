@@ -1,24 +1,56 @@
-const { Client, GatewayIntentBits, PermissionsBitField } = require('discord.js');
+const { Client, GatewayIntentBits, PermissionsBitField, ChannelType } = require('discord.js');
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 
 // --- 1. SETUP DISCORD BOT ---
 const client = new Client({
-    intents: [GatewayIntentBits.Guilds] // We only need Guilds to manage roles
+    intents: [GatewayIntentBits.Guilds] 
 });
 
-// --- 2. SETUP WEB SERVER & WEBSOCKETS ---
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-// The specific permissions we want to manage easily on the dashboard
-const MANAGEABLE_PERMISSIONS = [
+// --- THE MASTER PERMISSION LIST ---
+const ALL_PERMISSIONS = [
     { name: 'Administrator', flag: 'Administrator' },
+    { name: 'View Server Insights', flag: 'ViewGuildInsights' },
+    { name: 'View Audit Log', flag: 'ViewAuditLog' },
     { name: 'Manage Server', flag: 'ManageGuild' },
     { name: 'Manage Roles', flag: 'ManageRoles' },
-    { name: 'Send Messages', flag: 'SendMessages' }
+    { name: 'Manage Channels', flag: 'ManageChannels' },
+    { name: 'Kick Members', flag: 'KickMembers' },
+    { name: 'Ban Members', flag: 'BanMembers' },
+    { name: 'Create Invites', flag: 'CreateInstantInvite' },
+    { name: 'Change Nickname', flag: 'ChangeNickname' },
+    { name: 'Manage Nicknames', flag: 'ManageNicknames' },
+    { name: 'Manage Emojis/Stickers', flag: 'ManageGuildExpressions' },
+    { name: 'Manage Webhooks', flag: 'ManageWebhooks' },
+    { name: 'View Channels', flag: 'ViewChannel' },
+    { name: 'Send Messages', flag: 'SendMessages' },
+    { name: 'Send Messages in Threads', flag: 'SendMessagesInThreads' },
+    { name: 'Create Public Threads', flag: 'CreatePublicThreads' },
+    { name: 'Create Private Threads', flag: 'CreatePrivateThreads' },
+    { name: 'Embed Links', flag: 'EmbedLinks' },
+    { name: 'Attach Files', flag: 'AttachFiles' },
+    { name: 'Add Reactions', flag: 'AddReactions' },
+    { name: 'Use External Emojis', flag: 'UseExternalEmojis' },
+    { name: 'Use External Stickers', flag: 'UseExternalStickers' },
+    { name: 'Mention @everyone, @here, All Roles', flag: 'MentionEveryone' },
+    { name: 'Manage Messages', flag: 'ManageMessages' },
+    { name: 'Manage Threads', flag: 'ManageThreads' },
+    { name: 'Read Message History', flag: 'ReadMessageHistory' },
+    { name: 'Send TTS Messages', flag: 'SendTTSMessages' },
+    { name: 'Use App Commands', flag: 'UseApplicationCommands' },
+    { name: 'Connect (Voice)', flag: 'Connect' },
+    { name: 'Speak (Voice)', flag: 'Speak' },
+    { name: 'Video/Stream', flag: 'Stream' },
+    { name: 'Use Voice Activity', flag: 'UseVAD' },
+    { name: 'Priority Speaker', flag: 'PrioritySpeaker' },
+    { name: 'Mute Members', flag: 'MuteMembers' },
+    { name: 'Deafen Members', flag: 'DeafenMembers' },
+    { name: 'Move Members', flag: 'MoveMembers' }
 ];
 
 // --- 3. SERVE THE DASHBOARD ---
@@ -27,61 +59,106 @@ app.get('/', (req, res) => {
     <!DOCTYPE html>
     <html>
     <head>
-        <title>Live Role Manager</title>
+        <title>Live Role & Channel Manager</title>
         <script src="/socket.io/socket.io.js"></script>
         <style>
             body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #1e1e2e; color: #cdd6f4; padding: 2rem; }
-            h1 { color: #89b4fa; }
+            h1 { color: #89b4fa; border-bottom: 2px solid #313244; padding-bottom: 10px; }
             .role-card { background: #313244; padding: 1.5rem; margin-bottom: 1rem; border-radius: 8px; border-left: 6px solid #89b4fa; }
-            .perm-toggle { display: flex; justify-content: space-between; margin: 8px 0; background: #181825; padding: 10px; border-radius: 6px; }
-            button.toggle-btn { background: #45475a; color: white; border: none; padding: 5px 15px; border-radius: 4px; cursor: pointer; transition: 0.2s; }
-            button.toggle-btn.on { background: #a6e3a1; color: #11111b; font-weight: bold; }
-            button.toggle-btn.off { background: #f38ba8; color: #11111b; font-weight: bold; }
+            
+            /* Collapsible Sections */
+            details { background: #181825; border-radius: 6px; margin-top: 10px; }
+            summary { padding: 12px; font-weight: bold; cursor: pointer; user-select: none; color: #b4befe; }
+            summary:hover { background: #2a2b3c; border-radius: 6px; }
+            
+            /* Grids for toggles to save space */
+            .grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; padding: 15px; border-top: 1px solid #313244; }
+            .perm-toggle { display: flex; justify-content: space-between; align-items: center; background: #1e1e2e; padding: 8px 12px; border-radius: 6px; border: 1px solid #313244; font-size: 14px;}
+            
+            button.toggle-btn { border: none; padding: 5px 12px; border-radius: 4px; cursor: pointer; transition: 0.2s; font-size: 12px; font-weight: bold; }
+            button.toggle-btn.on { background: #a6e3a1; color: #11111b; }
+            button.toggle-btn.off { background: #f38ba8; color: #11111b; }
+            
+            .channel-icon { color: #89b4fa; font-family: monospace; font-size: 16px; margin-right: 5px;}
         </style>
     </head>
     <body>
-        <h1>🛡️ Live Role Manager</h1>
-        <p>Changes made here happen instantly in Discord.</p>
-        <div id="roles-container">Loading server data...</div>
+        <h1>🛡️ Ultimate Role Manager</h1>
+        <p>Manage all server permissions and channel visibility instantly.</p>
+        <div id="roles-container"><h2>Loading server data... (This might take a second)</h2></div>
 
         <script>
             const socket = io();
             const container = document.getElementById('roles-container');
 
-            // Listen for role data from the bot
+            function getChannelIcon(type) {
+                if (type === 0) return '#️⃣'; // Text
+                if (type === 2) return '🔊'; // Voice
+                if (type === 4) return '📁'; // Category
+                return '💬'; // Other
+            }
+
             socket.on('load_roles', (roles) => {
-                container.innerHTML = ''; // Clear loading text
+                container.innerHTML = ''; 
                 
                 roles.forEach(role => {
+                    // 1. Build Server Permissions Grid
                     let permsHtml = '';
+                    let enabledCount = 0;
                     role.permissions.forEach(perm => {
-                        const isOn = perm.has;
-                        const btnClass = isOn ? 'on' : 'off';
-                        const btnText = isOn ? 'ENABLED' : 'DISABLED';
-                        
+                        if(perm.has) enabledCount++;
+                        const btnClass = perm.has ? 'on' : 'off';
+                        const btnText = perm.has ? 'ENABLED' : 'DISABLED';
                         permsHtml += \`
                             <div class="perm-toggle">
                                 <span>\${perm.name}</span>
-                                <button class="toggle-btn \${btnClass}" onclick="togglePerm('\${role.id}', '\${perm.flag}', \${!isOn})">\${btnText}</button>
+                                <button class="toggle-btn \${btnClass}" onclick="togglePerm('\${role.id}', '\${perm.flag}', \${!perm.has})">\${btnText}</button>
                             </div>
                         \`;
                     });
 
+                    // 2. Build Channel Visibility Grid
+                    let channelsHtml = '';
+                    role.channels.forEach(channel => {
+                        const btnClass = channel.canView ? 'on' : 'off';
+                        const btnText = channel.canView ? 'CAN SEE' : 'HIDDEN';
+                        channelsHtml += \`
+                            <div class="perm-toggle">
+                                <span><span class="channel-icon">\${getChannelIcon(channel.type)}</span> \${channel.name}</span>
+                                <button class="toggle-btn \${btnClass}" onclick="toggleChannel('\${role.id}', '\${channel.id}', \${!channel.canView})">\${btnText}</button>
+                            </div>
+                        \`;
+                    });
+
+                    // 3. Put it all together in the Role Card
                     container.innerHTML += \`
                         <div class="role-card" style="border-left-color: \${role.color}">
-                            <h3>\${role.name}</h3>
-                            \${permsHtml}
+                            <h2>\${role.name}</h2>
+                            
+                            <details>
+                                <summary>⚙️ Server Permissions (\${enabledCount} Active)</summary>
+                                <div class="grid-container">\${permsHtml}</div>
+                            </details>
+                            
+                            <details>
+                                <summary>👁️ Channel Visibility</summary>
+                                <div class="grid-container">\${channelsHtml}</div>
+                            </details>
                         </div>
                     \`;
                 });
             });
 
-            // Send toggle request to bot
+            // Tell bot to toggle a general permission
             function togglePerm(roleId, permFlag, newState) {
                 socket.emit('toggle_permission', { roleId, permFlag, newState });
             }
 
-            // Listen for errors
+            // Tell bot to toggle channel visibility
+            function toggleChannel(roleId, channelId, newState) {
+                socket.emit('toggle_channel_view', { roleId, channelId, newState });
+            }
+
             socket.on('error_msg', (msg) => alert('Error: ' + msg));
         </script>
     </body>
@@ -91,47 +168,62 @@ app.get('/', (req, res) => {
 
 // --- 4. HANDLE REAL-TIME COMMUNICATION ---
 io.on('connection', async (socket) => {
-    console.log('💻 A user connected to the web dashboard.');
+    console.log('💻 A user connected to the dashboard.');
 
-    // Fetch roles and send to the webpage
     const sendRolesToWeb = async () => {
         const guild = client.guilds.cache.first();
         if (!guild) return;
 
         const roles = await guild.roles.fetch();
+        const channels = await guild.channels.fetch();
+
+        // Filter out bot roles and the @everyone role to prevent dashboard clutter/lockouts
         const sortedRoles = Array.from(roles.values())
-            .filter(r => r.id !== guild.id) // Exclude @everyone to prevent accidental lockouts
+            .filter(r => r.id !== guild.id && !r.managed) 
             .sort((a, b) => b.position - a.position);
 
-        const roleData = sortedRoles.map(role => ({
-            id: role.id,
-            name: role.name,
-            color: role.hexColor,
-            // Check which permissions this role currently has
-            permissions: MANAGEABLE_PERMISSIONS.map(p => ({
-                name: p.name,
-                flag: p.flag,
-                has: role.permissions.has(PermissionsBitField.Flags[p.flag])
-            }))
-        }));
+        const roleData = sortedRoles.map(role => {
+            // Check visibility for every text, voice, and category channel
+            const channelVisibility = Array.from(channels.values())
+                .filter(c => c && (c.type === ChannelType.GuildText || c.type === ChannelType.GuildVoice || c.type === ChannelType.GuildCategory))
+                .sort((a, b) => a.position - b.position)
+                .map(channel => {
+                    const permissions = channel.permissionsFor(role);
+                    return {
+                        id: channel.id,
+                        name: channel.name,
+                        type: channel.type,
+                        canView: permissions ? permissions.has(PermissionsBitField.Flags.ViewChannel) : false
+                    };
+                });
+
+            return {
+                id: role.id,
+                name: role.name,
+                color: role.hexColor,
+                permissions: ALL_PERMISSIONS.map(p => ({
+                    name: p.name,
+                    flag: p.flag,
+                    has: role.permissions.has(PermissionsBitField.Flags[p.flag])
+                })),
+                channels: channelVisibility
+            };
+        });
 
         socket.emit('load_roles', roleData);
     };
 
-    // Send initial data when someone opens the page
     if (client.isReady()) {
         await sendRolesToWeb();
     }
 
-    // Listen for the user clicking a toggle on the webpage
+    // EVENT: Toggle General Server Permission
     socket.on('toggle_permission', async (data) => {
         try {
             const guild = client.guilds.cache.first();
             const role = await guild.roles.fetch(data.roleId);
-            
             if (!role) return socket.emit('error_msg', 'Role not found.');
 
-            // Calculate new permissions
             let newPerms = new PermissionsBitField(role.permissions);
             if (data.newState === true) {
                 newPerms.add(PermissionsBitField.Flags[data.permFlag]);
@@ -139,35 +231,48 @@ io.on('connection', async (socket) => {
                 newPerms.remove(PermissionsBitField.Flags[data.permFlag]);
             }
 
-            // Update Discord
             await role.setPermissions(newPerms);
-            
-            // FIXED: Removed the stray backslashes here
-            console.log(`✅ Updated ${role.name}: Set ${data.permFlag} to ${data.newState}`);
-
-            // Broadcast the updated roles back to the webpage so the UI refreshes instantly
+            console.log(`✅ Server Perm Updated -> Role: ${role.name} | ${data.permFlag}: ${data.newState}`);
             await sendRolesToWeb();
-
         } catch (error) {
             console.error(error);
-            socket.emit('error_msg', 'Bot lacks permission to change this role. Make sure the Bot role is higher in the list than the role you are editing!');
+            socket.emit('error_msg', 'Bot lacks permission. Is the Bot role higher than this role?');
+        }
+    });
+
+    // EVENT: Toggle Specific Channel Visibility
+    socket.on('toggle_channel_view', async (data) => {
+        try {
+            const guild = client.guilds.cache.first();
+            const channel = guild.channels.cache.get(data.channelId);
+            const role = await guild.roles.fetch(data.roleId);
+            
+            if (!channel || !role) return socket.emit('error_msg', 'Channel or Role not found.');
+
+            // Edit the specific channel overwrite for this role
+            // If newState is true, we explicitly Allow. If false, we explicitly Deny.
+            await channel.permissionOverwrites.edit(data.roleId, {
+                ViewChannel: data.newState
+            });
+
+            console.log(`✅ Channel Perm Updated -> Role: ${role.name} | Channel: ${channel.name} | View: ${data.newState}`);
+            await sendRolesToWeb();
+        } catch (error) {
+            console.error(error);
+            socket.emit('error_msg', 'Bot lacks permission to edit this channel. Check role hierarchy.');
         }
     });
 });
 
 // --- 5. START UP ---
 client.on('ready', () => {
-    // FIXED: Removed the stray backslashes here
     console.log(`🤖 Discord Bot connected as ${client.user.tag}`);
-    
     const PORT = process.env.PORT || 3000;
     server.listen(PORT, '0.0.0.0', () => {
-        // FIXED: Removed the stray backslashes here
         console.log(`🌐 Web Dashboard live on port ${PORT}`);
     });
 });
 
-// Log in
 const TOKEN = process.env.DISCORD_TOKEN;
 if (!TOKEN) {
     console.error("❌ ERROR: Missing DISCORD_TOKEN");

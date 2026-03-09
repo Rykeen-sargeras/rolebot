@@ -80,6 +80,7 @@ app.get('/', (req, res) => {
             button.toggle-btn.off { background: #f38ba8; color: #11111b; }
             
             .channel-icon { color: #89b4fa; font-family: monospace; font-size: 16px; margin-right: 5px;}
+            .managed-badge { font-size: 12px; background: #f38ba8; color: #11111b; padding: 3px 8px; border-radius: 12px; margin-left: 10px; vertical-align: middle; font-weight: bold; }
         </style>
     </head>
     <body>
@@ -105,17 +106,27 @@ app.get('/', (req, res) => {
                     // 1. Build Server Permissions Grid
                     let permsHtml = '';
                     let enabledCount = 0;
-                    role.permissions.forEach(perm => {
-                        if(perm.has) enabledCount++;
-                        const btnClass = perm.has ? 'on' : 'off';
-                        const btnText = perm.has ? 'ENABLED' : 'DISABLED';
-                        permsHtml += \`
-                            <div class="perm-toggle">
-                                <span>\${perm.name}</span>
-                                <button class="toggle-btn \${btnClass}" onclick="togglePerm('\${role.id}', '\${perm.flag}', \${!perm.has})">\${btnText}</button>
-                            </div>
-                        \`;
-                    });
+                    
+                    role.permissions.forEach(perm => { if(perm.has) enabledCount++; });
+
+                    if (role.managed) {
+                        permsHtml = \`<div style="padding: 15px; color: #f38ba8; font-style: italic;">
+                            Discord prevents bots from changing core Server Permissions for integration roles (like YouTube subs, Server Boosters, or Bots). <br><br>
+                            👉 <b>You CAN still change which channels they see in the section below!</b>
+                        </div>\`;
+                    } else {
+                        role.permissions.forEach(perm => {
+                            const btnClass = perm.has ? 'on' : 'off';
+                            const btnText = perm.has ? 'ENABLED' : 'DISABLED';
+                            permsHtml += \`
+                                <div class="perm-toggle">
+                                    <span>\${perm.name}</span>
+                                    <button class="toggle-btn \${btnClass}" onclick="togglePerm('\${role.id}', '\${perm.flag}', \${!perm.has})">\${btnText}</button>
+                                </div>
+                            \`;
+                        });
+                        permsHtml = \`<div class="grid-container">\${permsHtml}</div>\`;
+                    }
 
                     // 2. Build Channel Visibility Grid
                     let channelsHtml = '';
@@ -131,13 +142,15 @@ app.get('/', (req, res) => {
                     });
 
                     // 3. Put it all together in the Role Card
+                    const badgeHtml = role.managed ? '<span class="managed-badge">🔗 YouTube / Integration Role</span>' : '';
+                    
                     container.innerHTML += \`
                         <div class="role-card" style="border-left-color: \${role.color}">
-                            <h2>\${role.name}</h2>
+                            <h2>\${role.name} \${badgeHtml}</h2>
                             
                             <details>
                                 <summary>⚙️ Server Permissions (\${enabledCount} Active)</summary>
-                                <div class="grid-container">\${permsHtml}</div>
+                                \${permsHtml}
                             </details>
                             
                             <details>
@@ -177,13 +190,13 @@ io.on('connection', async (socket) => {
         const roles = await guild.roles.fetch();
         const channels = await guild.channels.fetch();
 
-        // Filter out bot roles and the @everyone role to prevent dashboard clutter/lockouts
+        // FIXED: Now we ONLY filter out the @everyone role (id === guild.id). 
+        // We removed the !r.managed filter so YouTube roles show up!
         const sortedRoles = Array.from(roles.values())
-            .filter(r => r.id !== guild.id && !r.managed) 
+            .filter(r => r.id !== guild.id) 
             .sort((a, b) => b.position - a.position);
 
         const roleData = sortedRoles.map(role => {
-            // Check visibility for every text, voice, and category channel
             const channelVisibility = Array.from(channels.values())
                 .filter(c => c && (c.type === ChannelType.GuildText || c.type === ChannelType.GuildVoice || c.type === ChannelType.GuildCategory))
                 .sort((a, b) => a.position - b.position)
@@ -201,6 +214,7 @@ io.on('connection', async (socket) => {
                 id: role.id,
                 name: role.name,
                 color: role.hexColor,
+                managed: role.managed, // Pass this to the frontend so we know it's a YouTube role
                 permissions: ALL_PERMISSIONS.map(p => ({
                     name: p.name,
                     flag: p.flag,
@@ -217,12 +231,12 @@ io.on('connection', async (socket) => {
         await sendRolesToWeb();
     }
 
-    // EVENT: Toggle General Server Permission
     socket.on('toggle_permission', async (data) => {
         try {
             const guild = client.guilds.cache.first();
             const role = await guild.roles.fetch(data.roleId);
             if (!role) return socket.emit('error_msg', 'Role not found.');
+            if (role.managed) return socket.emit('error_msg', 'Cannot change Server Perms for Integration roles.');
 
             let newPerms = new PermissionsBitField(role.permissions);
             if (data.newState === true) {
@@ -240,7 +254,6 @@ io.on('connection', async (socket) => {
         }
     });
 
-    // EVENT: Toggle Specific Channel Visibility
     socket.on('toggle_channel_view', async (data) => {
         try {
             const guild = client.guilds.cache.first();
@@ -249,8 +262,6 @@ io.on('connection', async (socket) => {
             
             if (!channel || !role) return socket.emit('error_msg', 'Channel or Role not found.');
 
-            // Edit the specific channel overwrite for this role
-            // If newState is true, we explicitly Allow. If false, we explicitly Deny.
             await channel.permissionOverwrites.edit(data.roleId, {
                 ViewChannel: data.newState
             });

@@ -57,96 +57,175 @@ const ALL_PERMISSIONS = [
 app.get('/', (req, res) => {
     res.send(`
     <!DOCTYPE html>
-    <html>
+    <html lang="en">
     <head>
-        <title>Live Role & Channel Manager</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Server Control Panel</title>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
         <script src="/socket.io/socket.io.js"></script>
         <style>
-            body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #1e1e2e; color: #cdd6f4; padding: 2rem; }
-            h1 { color: #89b4fa; border-bottom: 2px solid #313244; padding-bottom: 10px; }
-            .role-card { background: #313244; padding: 1.5rem; margin-bottom: 1rem; border-radius: 8px; border-left: 6px solid #89b4fa; }
+            :root {
+                --bg-main: #0f172a;
+                --bg-card: #1e293b;
+                --bg-hover: #334155;
+                --text-main: #f8fafc;
+                --text-muted: #94a3b8;
+                --accent: #6366f1;
+                --success: #10b981;
+                --danger: #ef4444;
+                --border: #334155;
+            }
+
+            body { 
+                font-family: 'Inter', sans-serif; 
+                background: var(--bg-main); 
+                color: var(--text-main); 
+                padding: 2rem; 
+                margin: 0;
+                line-height: 1.5;
+                padding-bottom: 100px; /* Space for the save bar */
+            }
             
-            /* Collapsible Sections */
-            details { background: #181825; border-radius: 6px; margin-top: 10px; }
-            summary { padding: 12px; font-weight: bold; cursor: pointer; user-select: none; color: #b4befe; }
-            summary:hover { background: #2a2b3c; border-radius: 6px; }
+            .header-container { max-width: 1200px; margin: 0 auto 2rem auto; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border); }
+            h1 { margin: 0; font-size: 2rem; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+            .subtitle { color: var(--text-muted); margin-top: 0.5rem; font-size: 0.95rem; }
+            #roles-container { max-width: 1200px; margin: 0 auto; }
+
+            .role-card { 
+                background: var(--bg-card); margin-bottom: 1.5rem; border-radius: 12px; 
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+                overflow: hidden;
+            }
+
+            .role-header { padding: 1.25rem 1.5rem; border-left: 6px solid #89b4fa; display: flex; align-items: center; gap: 12px; background: rgba(255, 255, 255, 0.02); }
+            .role-header h2 { margin: 0; font-size: 1.25rem; }
+
+            .badge { font-size: 0.75rem; font-weight: 600; padding: 4px 10px; border-radius: 20px; background: rgba(239, 68, 68, 0.15); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.3); }
+
+            details { border-top: 1px solid var(--border); }
+            summary { padding: 1rem 1.5rem; font-weight: 600; cursor: pointer; user-select: none; color: var(--text-main); transition: background 0.2s ease; display: flex; align-items: center; }
+            summary:hover { background: rgba(255, 255, 255, 0.03); }
             
-            /* Grids for toggles to save space */
-            .grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; padding: 15px; border-top: 1px solid #313244; }
-            .perm-toggle { display: flex; justify-content: space-between; align-items: center; background: #1e1e2e; padding: 8px 12px; border-radius: 6px; border: 1px solid #313244; font-size: 14px;}
+            .grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; padding: 1.5rem; background: rgba(15, 23, 42, 0.4); }
+            .perm-row { display: flex; justify-content: space-between; align-items: center; background: var(--bg-card); padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border); font-size: 0.9rem; transition: border-color 0.2s; }
+            .perm-row:hover { border-color: #475569; }
+
+            .channel-icon { color: var(--text-muted); font-size: 1.1rem; margin-right: 8px; vertical-align: middle; }
+
+            /* Toggle Switch */
+            .switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
+            .switch input { opacity: 0; width: 0; height: 0; }
+            .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--bg-hover); transition: .3s; border-radius: 24px; }
+            .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+            input:checked + .slider { background-color: var(--success); }
+            input:checked + .slider:before { transform: translateX(20px); }
+
+            .alert-box { margin: 1.5rem; padding: 1rem; background: rgba(239, 68, 68, 0.1); border-left: 4px solid var(--danger); border-radius: 0 8px 8px 0; color: #fca5a5; font-size: 0.9rem; }
+
+            /* Floating Save Bar */
+            #save-bar {
+                position: fixed; bottom: 0; left: 0; right: 0; background: #0f172a;
+                border-top: 1px solid var(--border); padding: 1rem 2rem;
+                display: flex; justify-content: center; align-items: center; gap: 15px;
+                transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                box-shadow: 0 -10px 15px -3px rgba(0, 0, 0, 0.1); z-index: 1000;
+            }
+            #save-bar.visible { transform: translateY(0); }
             
-            button.toggle-btn { border: none; padding: 5px 12px; border-radius: 4px; cursor: pointer; transition: 0.2s; font-size: 12px; font-weight: bold; }
-            button.toggle-btn.on { background: #a6e3a1; color: #11111b; }
-            button.toggle-btn.off { background: #f38ba8; color: #11111b; }
-            
-            .channel-icon { color: #89b4fa; font-family: monospace; font-size: 16px; margin-right: 5px;}
-            .managed-badge { font-size: 12px; background: #f38ba8; color: #11111b; padding: 3px 8px; border-radius: 12px; margin-left: 10px; vertical-align: middle; font-weight: bold; }
+            .btn-save { background: var(--success); color: #fff; border: none; padding: 10px 24px; border-radius: 6px; font-weight: 600; font-size: 1rem; cursor: pointer; transition: 0.2s; }
+            .btn-save:hover { background: #059669; }
+            .btn-discard { background: var(--bg-hover); color: #fff; border: none; padding: 10px 24px; border-radius: 6px; font-weight: 600; font-size: 1rem; cursor: pointer; transition: 0.2s; }
+            .btn-discard:hover { background: #475569; }
         </style>
     </head>
     <body>
-        <h1>🛡️ Ultimate Role Manager</h1>
-        <p>Manage all server permissions and channel visibility instantly.</p>
-        <div id="roles-container"><h2>Loading server data... (This might take a second)</h2></div>
+        <div class="header-container">
+            <h1>🛡️ Discord Control Panel</h1>
+            <div class="subtitle">Queue your changes and click Save to push them to Discord.</div>
+        </div>
+        
+        <div id="roles-container">
+            <h2 style="text-align: center; color: var(--text-muted); margin-top: 3rem;">Loading server data...</h2>
+        </div>
+
+        <div id="save-bar">
+            <span style="color: var(--text-main); font-weight: 500;">You have unsaved changes!</span>
+            <button class="btn-discard" onclick="discardChanges()">Discard</button>
+            <button class="btn-save" onclick="saveChanges()">Save Changes</button>
+        </div>
 
         <script>
             const socket = io();
             const container = document.getElementById('roles-container');
+            const saveBar = document.getElementById('save-bar');
+            
+            // This object holds all the changes you make before you hit save
+            let stagedChanges = {};
 
             function getChannelIcon(type) {
-                if (type === 0) return '#️⃣'; // Text
+                if (type === 0) return '💬'; // Text
                 if (type === 2) return '🔊'; // Voice
                 if (type === 4) return '📁'; // Category
-                return '💬'; // Other
+                return '📍'; // Other
             }
 
+            // Receive role data from the bot
             socket.on('load_roles', (roles) => {
                 container.innerHTML = ''; 
+                stagedChanges = {}; // Reset changes
+                saveBar.classList.remove('visible'); // Hide save bar
                 
                 roles.forEach(role => {
-                    // 1. Build Server Permissions Grid
                     let permsHtml = '';
                     let enabledCount = 0;
                     
                     role.permissions.forEach(perm => { if(perm.has) enabledCount++; });
 
+                    // Base Permissions Block
                     if (role.managed) {
-                        permsHtml = \`<div style="padding: 15px; color: #f38ba8; font-style: italic;">
-                            Discord prevents bots from changing core Server Permissions for integration roles (like YouTube subs, Server Boosters, or Bots). <br><br>
-                            👉 <b>You CAN still change which channels they see in the section below!</b>
+                        permsHtml = \`<div class="alert-box">
+                            <strong>Integration Role Locked:</strong> Discord prevents bots from changing core Server Permissions for integration roles. <br><br>
+                            👉 You can still change which channels this role can see in the section below.
                         </div>\`;
                     } else {
+                        let toggleRows = '';
                         role.permissions.forEach(perm => {
-                            const btnClass = perm.has ? 'on' : 'off';
-                            const btnText = perm.has ? 'ENABLED' : 'DISABLED';
-                            permsHtml += \`
-                                <div class="perm-toggle">
+                            toggleRows += \`
+                                <div class="perm-row">
                                     <span>\${perm.name}</span>
-                                    <button class="toggle-btn \${btnClass}" onclick="togglePerm('\${role.id}', '\${perm.flag}', \${!perm.has})">\${btnText}</button>
+                                    <label class="switch">
+                                        <input type="checkbox" \${perm.has ? 'checked' : ''} onchange="queuePerm('\${role.id}', '\${perm.flag}', this.checked)">
+                                        <span class="slider"></span>
+                                    </label>
                                 </div>
                             \`;
                         });
-                        permsHtml = \`<div class="grid-container">\${permsHtml}</div>\`;
+                        permsHtml = \`<div class="grid-container">\${toggleRows}</div>\`;
                     }
 
-                    // 2. Build Channel Visibility Grid
+                    // Channel Visibility Block
                     let channelsHtml = '';
                     role.channels.forEach(channel => {
-                        const btnClass = channel.canView ? 'on' : 'off';
-                        const btnText = channel.canView ? 'CAN SEE' : 'HIDDEN';
                         channelsHtml += \`
-                            <div class="perm-toggle">
+                            <div class="perm-row">
                                 <span><span class="channel-icon">\${getChannelIcon(channel.type)}</span> \${channel.name}</span>
-                                <button class="toggle-btn \${btnClass}" onclick="toggleChannel('\${role.id}', '\${channel.id}', \${!channel.canView})">\${btnText}</button>
+                                <label class="switch">
+                                    <input type="checkbox" \${channel.canView ? 'checked' : ''} onchange="queueChannel('\${role.id}', '\${channel.id}', this.checked)">
+                                    <span class="slider"></span>
+                                </label>
                             </div>
                         \`;
                     });
 
-                    // 3. Put it all together in the Role Card
-                    const badgeHtml = role.managed ? '<span class="managed-badge">🔗 YouTube / Integration Role</span>' : '';
+                    const badgeHtml = role.managed ? '<span class="badge">🔗 Managed Integration</span>' : '';
                     
                     container.innerHTML += \`
-                        <div class="role-card" style="border-left-color: \${role.color}">
-                            <h2>\${role.name} \${badgeHtml}</h2>
+                        <div class="role-card">
+                            <div class="role-header" style="border-left-color: \${role.color !== '#000000' ? role.color : '#6366f1'}">
+                                <h2>\${role.name}</h2>
+                                \${badgeHtml}
+                            </div>
                             
                             <details>
                                 <summary>⚙️ Server Permissions (\${enabledCount} Active)</summary>
@@ -162,17 +241,44 @@ app.get('/', (req, res) => {
                 });
             });
 
-            // Tell bot to toggle a general permission
-            function togglePerm(roleId, permFlag, newState) {
-                socket.emit('toggle_permission', { roleId, permFlag, newState });
+            // Queue a server permission change
+            function queuePerm(roleId, permFlag, state) {
+                if (!stagedChanges[roleId]) stagedChanges[roleId] = { perms: {}, channels: {} };
+                stagedChanges[roleId].perms[permFlag] = state;
+                saveBar.classList.add('visible');
             }
 
-            // Tell bot to toggle channel visibility
-            function toggleChannel(roleId, channelId, newState) {
-                socket.emit('toggle_channel_view', { roleId, channelId, newState });
+            // Queue a channel visibility change
+            function queueChannel(roleId, channelId, state) {
+                if (!stagedChanges[roleId]) stagedChanges[roleId] = { perms: {}, channels: {} };
+                stagedChanges[roleId].channels[channelId] = state;
+                saveBar.classList.add('visible');
             }
 
-            socket.on('error_msg', (msg) => alert('Error: ' + msg));
+            // Push all changes to the bot
+            function saveChanges() {
+                saveBar.innerHTML = '<span style="color: white; font-weight: bold;">Saving to Discord...</span>';
+                socket.emit('save_all_changes', stagedChanges);
+            }
+
+            // Cancel changes and reload original data
+            function discardChanges() {
+                socket.emit('request_reload');
+                saveBar.classList.remove('visible');
+            }
+
+            socket.on('error_msg', (msg) => {
+                alert('⚠️ Warning: ' + msg);
+            });
+
+            socket.on('save_complete', () => {
+                // Reset the save bar UI
+                saveBar.innerHTML = \`
+                    <span style="color: var(--text-main); font-weight: 500;">You have unsaved changes!</span>
+                    <button class="btn-discard" onclick="discardChanges()">Discard</button>
+                    <button class="btn-save" onclick="saveChanges()">Save Changes</button>
+                \`;
+            });
         </script>
     </body>
     </html>
@@ -190,8 +296,7 @@ io.on('connection', async (socket) => {
         const roles = await guild.roles.fetch();
         const channels = await guild.channels.fetch();
 
-        // FIXED: Now we ONLY filter out the @everyone role (id === guild.id). 
-        // We removed the !r.managed filter so YouTube roles show up!
+        // Filter out @everyone role
         const sortedRoles = Array.from(roles.values())
             .filter(r => r.id !== guild.id) 
             .sort((a, b) => b.position - a.position);
@@ -214,7 +319,7 @@ io.on('connection', async (socket) => {
                 id: role.id,
                 name: role.name,
                 color: role.hexColor,
-                managed: role.managed, // Pass this to the frontend so we know it's a YouTube role
+                managed: role.managed,
                 permissions: ALL_PERMISSIONS.map(p => ({
                     name: p.name,
                     flag: p.flag,
@@ -231,47 +336,63 @@ io.on('connection', async (socket) => {
         await sendRolesToWeb();
     }
 
-    socket.on('toggle_permission', async (data) => {
-        try {
-            const guild = client.guilds.cache.first();
-            const role = await guild.roles.fetch(data.roleId);
-            if (!role) return socket.emit('error_msg', 'Role not found.');
-            if (role.managed) return socket.emit('error_msg', 'Cannot change Server Perms for Integration roles.');
-
-            let newPerms = new PermissionsBitField(role.permissions);
-            if (data.newState === true) {
-                newPerms.add(PermissionsBitField.Flags[data.permFlag]);
-            } else {
-                newPerms.remove(PermissionsBitField.Flags[data.permFlag]);
-            }
-
-            await role.setPermissions(newPerms);
-            console.log(`✅ Server Perm Updated -> Role: ${role.name} | ${data.permFlag}: ${data.newState}`);
-            await sendRolesToWeb();
-        } catch (error) {
-            console.error(error);
-            socket.emit('error_msg', 'Bot lacks permission. Is the Bot role higher than this role?');
-        }
+    // Refresh button logic
+    socket.on('request_reload', async () => {
+        await sendRolesToWeb();
     });
 
-    socket.on('toggle_channel_view', async (data) => {
-        try {
-            const guild = client.guilds.cache.first();
-            const channel = guild.channels.cache.get(data.channelId);
-            const role = await guild.roles.fetch(data.roleId);
-            
-            if (!channel || !role) return socket.emit('error_msg', 'Channel or Role not found.');
+    // MASTER SAVE FUNCTION
+    socket.on('save_all_changes', async (changes) => {
+        const guild = client.guilds.cache.first();
+        if (!guild) return;
 
-            await channel.permissionOverwrites.edit(data.roleId, {
-                ViewChannel: data.newState
-            });
+        let hasError = false;
 
-            console.log(`✅ Channel Perm Updated -> Role: ${role.name} | Channel: ${channel.name} | View: ${data.newState}`);
-            await sendRolesToWeb();
-        } catch (error) {
-            console.error(error);
-            socket.emit('error_msg', 'Bot lacks permission to edit this channel. Check role hierarchy.');
+        for (const [roleId, data] of Object.entries(changes)) {
+            try {
+                const role = await guild.roles.fetch(roleId);
+                if (!role) continue;
+
+                // 1. Process Base Server Permissions (Skip if it's a managed/integration role)
+                if (Object.keys(data.perms).length > 0 && !role.managed) {
+                    let newPerms = new PermissionsBitField(role.permissions);
+                    
+                    for (const [flag, state] of Object.entries(data.perms)) {
+                        if (state === true) newPerms.add(PermissionsBitField.Flags[flag]);
+                        else newPerms.remove(PermissionsBitField.Flags[flag]);
+                    }
+                    
+                    await role.setPermissions(newPerms);
+                    console.log(`✅ Base Perms updated for ${role.name}`);
+                }
+
+                // 2. Process Channel Visibility Overrides
+                if (Object.keys(data.channels).length > 0) {
+                    for (const [channelId, state] of Object.entries(data.channels)) {
+                        const channel = guild.channels.cache.get(channelId);
+                        if (channel) {
+                            // By explicitly setting ViewChannel to true or false, we override it for this specific role!
+                            await channel.permissionOverwrites.edit(roleId, {
+                                ViewChannel: state
+                            });
+                            console.log(`✅ Channel Vis updated for ${role.name} in #${channel.name}`);
+                        }
+                    }
+                }
+
+            } catch (error) {
+                console.error(error);
+                hasError = true;
+            }
         }
+
+        if (hasError) {
+            socket.emit('error_msg', 'Some changes failed. Ensure the bot has "Manage Roles" and "Manage Channels" permissions, and that its highest role is placed above the roles you are editing in Discord Settings.');
+        }
+
+        // Tell the frontend we are done saving and refresh the UI
+        socket.emit('save_complete');
+        await sendRolesToWeb();
     });
 });
 

@@ -141,7 +141,9 @@ io.on('connection', async (socket) => {
 
             // Update Discord
             await role.setPermissions(newPerms);
-            console.log(\`✅ Updated \${role.name}: Set \${data.permFlag} to \${data.newState}\`);
+            
+            // FIXED: Removed the stray backslashes here
+            console.log(`✅ Updated ${role.name}: Set ${data.permFlag} to ${data.newState}`);
 
             // Broadcast the updated roles back to the webpage so the UI refreshes instantly
             await sendRolesToWeb();
@@ -155,11 +157,13 @@ io.on('connection', async (socket) => {
 
 // --- 5. START UP ---
 client.on('ready', () => {
-    console.log(\`🤖 Discord Bot connected as \${client.user.tag}\`);
+    // FIXED: Removed the stray backslashes here
+    console.log(`🤖 Discord Bot connected as ${client.user.tag}`);
     
     const PORT = process.env.PORT || 3000;
     server.listen(PORT, '0.0.0.0', () => {
-        console.log(\`🌐 Web Dashboard live on port \${PORT}\`);
+        // FIXED: Removed the stray backslashes here
+        console.log(`🌐 Web Dashboard live on port ${PORT}`);
     });
 });
 

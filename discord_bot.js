@@ -55,23 +55,6 @@ function addAuditLog(action, user, details, severity = 'info') {
     console.log(`[AUDIT ${severity.toUpperCase()}] ${action} by ${logEntry.user}: ${details}`);
 }
 
-// Audit log storage (in-memory, will reset on restart)
-const auditLog = [];
-const MAX_AUDIT_ENTRIES = 1000;
-
-function addAuditEntry(action, user, details) {
-    const entry = {
-        timestamp: new Date().toISOString(),
-        action,
-        user,
-        details
-    };
-    auditLog.unshift(entry); // Add to beginning
-    if (auditLog.length > MAX_AUDIT_ENTRIES) {
-        auditLog.pop(); // Remove oldest
-    }
-    console.log(`📝 AUDIT: ${action} by ${user} - ${details}`);
-}
 
 client.on('ready', () => {
     console.log(`✅ Bot logged in as ${client.user.tag}`);
@@ -317,10 +300,11 @@ async function handleAddressDetection(message, address) {
         console.log('✅ User timed out');
         
         // Add audit log entry
-        addAuditEntry(
-            'ADDRESS_DETECTED',
-            message.author.tag,
-            `Detected in #${message.channel.name}: ${address.substring(0, 50)}... - User timed out 12hrs`
+        addAuditLog(
+            'Address Detected',
+            message.author,
+            `Detected in #${message.channel.name}: ${address.substring(0, 50)}... - User timed out 12hrs`,
+            'warning'
         );
         
         // Alert mod channel
@@ -465,7 +449,7 @@ async function createTechTicket(user, state) {
             ],
         });
         
-        addAuditEntry('TICKET_CREATED', user.tag, `Tech ticket #${ticketNumber} - ${state.description.substring(0, 50)}...`);
+        addAuditLog('Ticket Created', { tag: user.tag, id: user.id }, `Tech ticket #${ticketNumber} - ${state.description.substring(0, 50)}...`, 'info');
         
         const embed = new Discord.EmbedBuilder()
             .setColor('#00FF00')
@@ -954,7 +938,7 @@ function startKeepAliveServer() {
                     const mainChannel = await client.channels.fetch(CONFIG.MAIN_CHAT_CHANNEL_ID);
                     await mainChannel.send(data.message);
                     
-                    addAuditEntry('MESSAGE_SENT', 'Web Dashboard', `Sent to main chat: ${data.message.substring(0, 50)}...`);
+                    addAuditLog('Message Sent', { tag: 'Web Dashboard', id: 'web' }, `Sent to main chat: ${data.message.substring(0, 50)}...`, 'success');
                     
                     res.writeHead(200, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: true, message: 'Message sent!' }));

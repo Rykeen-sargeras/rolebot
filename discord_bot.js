@@ -24,6 +24,7 @@ const CONFIG = {
     LOG_CHANNEL_ID: process.env.LOG_CHANNEL_ID || '',
     TICKET_CATEGORY_ID: process.env.TICKET_CATEGORY_ID || '',
     STAFF_ROLE_IDS: (process.env.STAFF_ROLE_IDS || '').split(',').filter(Boolean),
+    WEB_DASHBOARD_PASSWORD: process.env.WEB_DASHBOARD_PASSWORD || 'admin123', // Set a secure password!
 };
 
 // Store user states for interactive commands and tickets
@@ -31,9 +32,51 @@ const userStates = new Map();
 const streamAlerts = new Map(); // Track which alerts have been sent
 let lastStreamCheck = null;
 
+// Audit log system
+const auditLog = [];
+const MAX_AUDIT_LOGS = 500; // Keep last 500 events
+
+function addAuditLog(action, user, details, severity = 'info') {
+    const logEntry = {
+        timestamp: new Date().toISOString(),
+        action,
+        user: user ? `${user.tag} (${user.id})` : 'System',
+        details,
+        severity // info, warning, error, success
+    };
+    
+    auditLog.unshift(logEntry); // Add to beginning
+    
+    // Keep only last MAX_AUDIT_LOGS entries
+    if (auditLog.length > MAX_AUDIT_LOGS) {
+        auditLog.pop();
+    }
+    
+    console.log(`[AUDIT ${severity.toUpperCase()}] ${action} by ${logEntry.user}: ${details}`);
+}
+
+// Audit log storage (in-memory, will reset on restart)
+const auditLog = [];
+const MAX_AUDIT_ENTRIES = 1000;
+
+function addAuditEntry(action, user, details) {
+    const entry = {
+        timestamp: new Date().toISOString(),
+        action,
+        user,
+        details
+    };
+    auditLog.unshift(entry); // Add to beginning
+    if (auditLog.length > MAX_AUDIT_ENTRIES) {
+        auditLog.pop(); // Remove oldest
+    }
+    console.log(`📝 AUDIT: ${action} by ${user} - ${details}`);
+}
+
 client.on('ready', () => {
     console.log(`✅ Bot logged in as ${client.user.tag}`);
     console.log(`📊 Dashboard available at: http://localhost:10000`);
+    addAuditLog('Bot Started', client.user, `Bot logged in as ${client.user.tag}`, 'success');
     
     // Start stream checking (every minute)
     setInterval(checkYouTubeStreams, 60000);
@@ -199,30 +242,62 @@ client.on('messageCreate', async (message) => {
     }
 });
 
-// Address detection patterns
+// Address detection patterns - more strict to avoid false positives
 const ADDRESS_PATTERNS = [
-    // US addresses
-    /\b\d{1,5}\s+[\w\s]{1,50}(?:street|st|avenue|ave|road|rd|boulevard|blvd|lane|ln|drive|dr|court|ct|circle|cir|way)\b/i,
-    /\b\d{5}(?:-\d{4})?\b/, // ZIP codes
+    // US street addresses (must have number + street type word)
+    /\b\d{1,5}\s+[\w\s]{3,50}(?:street|st|avenue|ave|road|rd|boulevard|blvd|lane|ln|drive|dr|court|ct|circle|cir|way|place|pl)\b/i,
     
-    // UK postcodes
-    /\b[A-Z]{1,2}\d{1,2}[A-Z]?\s*\d[A-Z]{2}\b/i,
+    // ZIP code ONLY if followed by USA/US context or state abbreviation
+    /\b\d{5}(?:-\d{4})?\s*(?:usa|united states|u\.s\.|us\b)/i,
+    /\b(?:AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)\s+\d{5}\b/,
     
-    // Australian postcodes
+    // UK postcodes (specific format)
+    /\b[A-Z]{1,2}\d{1,2}[A-Z]?\s+\d[A-Z]{2}\b.*(?:uk|united kingdom|england|scotland|wales)/i,
+    
+    // Australian addresses (state + postcode)
     /\b(?:NSW|VIC|QLD|SA|WA|TAS|NT|ACT)\s+\d{4}\b/i,
     
-    // French postcodes
-    /\b\d{5}\b.*\bFrance\b/i,
+    // Address with apartment/unit indicators
+    /\b(?:apartment|apt|unit|suite|ste|floor|fl)\s*#?\d+\b.*\b(?:street|st|avenue|ave|road|rd|boulevard|blvd)\b/i,
     
-    // General street indicators
-    /\b(?:apartment|apt|unit|suite|ste|floor|fl)\s*#?\d+/i,
+    // Full address pattern (number + street name + city/state)
+    /\b\d{1,5}\s+[\w\s]{3,30}(?:street|st|avenue|ave|road|rd)\b,?\s+[\w\s]{3,20},?\s+(?:[A-Z]{2}|\w{4,})/i,
 ];
 
 function detectAddress(text) {
+    // Ignore if message is too short (likely not a real address)
+    if (text.length < 15) return null;
+    
+    // Ignore if message contains whitelisted phrases (context that indicates not a real address)
+    const whitelistPhrases = [
+        'example', 'test', 'fake', 'sample', 'lorem ipsum',
+        'http', 'https', 'www.', '.com', '.net', '.org',
+        'discord.gg', 'youtube.com', 'twitter.com',
+        'price', 'cost', '$', '€', '£', 'buy', 'sell',
+        'code', 'error', 'line', 'function'
+    ];
+    
+    const lowerText = text.toLowerCase();
+    for (const phrase of whitelistPhrases) {
+        if (lowerText.includes(phrase)) return null;
+    }
+    
+    // Check patterns
     for (const pattern of ADDRESS_PATTERNS) {
         const match = text.match(pattern);
         if (match) {
-            return match[0];
+            // Extra validation: make sure it looks like a real address
+            const matchText = match[0];
+            
+            // Ignore if it's just numbers with no context
+            if (/^\d+$/.test(matchText.trim())) return null;
+            
+            // Ignore if it's a single short word with numbers
+            if (matchText.length < 10 && !/(?:street|avenue|road|blvd|lane|drive)/.test(matchText.toLowerCase())) {
+                return null;
+            }
+            
+            return matchText;
         }
     }
     return null;
@@ -230,15 +305,34 @@ function detectAddress(text) {
 
 async function handleAddressDetection(message, address) {
     try {
+        console.log(`🚨 Address detected from ${message.author.tag} in #${message.channel.name}`);
+        console.log(`MOD_CHANNEL_ID configured: ${CONFIG.MOD_CHANNEL_ID || 'NOT SET'}`);
+        
         // Delete the message
         await message.delete();
+        console.log('✅ Message deleted');
         
         // Timeout user for 12 hours
         await message.member.timeout(12 * 60 * 60 * 1000, 'Posted address in chat');
+        console.log('✅ User timed out');
+        
+        // Add audit log entry
+        addAuditEntry(
+            'ADDRESS_DETECTED',
+            message.author.tag,
+            `Detected in #${message.channel.name}: ${address.substring(0, 50)}... - User timed out 12hrs`
+        );
         
         // Alert mod channel
-        const modChannel = await client.channels.fetch(CONFIG.MOD_CHANNEL_ID);
-        if (modChannel) {
+        if (!CONFIG.MOD_CHANNEL_ID) {
+            console.error('❌ MOD_CHANNEL_ID not configured! Cannot send alert.');
+            return;
+        }
+        
+        try {
+            const modChannel = await client.channels.fetch(CONFIG.MOD_CHANNEL_ID);
+            console.log(`✅ Mod channel fetched: ${modChannel.name}`);
+            
             const embed = new Discord.EmbedBuilder()
                 .setColor('#FF0000')
                 .setTitle('🚨 Address Detected and Removed')
@@ -251,16 +345,21 @@ async function handleAddressDetection(message, address) {
                 .setTimestamp();
             
             await modChannel.send({ embeds: [embed] });
+            console.log('✅ Alert sent to mod channel');
+        } catch (modError) {
+            console.error('❌ Error sending to mod channel:', modError.message);
+            console.error('Check that MOD_CHANNEL_ID is correct and bot has permissions');
         }
         
         // DM user
         try {
             await message.author.send('⚠️ Your message was removed for containing what appears to be a physical address. For your safety, please do not share personal information in public channels. You have been timed out for 12 hours.');
+            console.log('✅ DM sent to user');
         } catch (e) {
-            console.log('Could not DM user about address detection');
+            console.log('⚠️ Could not DM user about address detection');
         }
     } catch (error) {
-        console.error('Error handling address detection:', error);
+        console.error('❌ Error handling address detection:', error);
     }
 }
 
@@ -366,6 +465,8 @@ async function createTechTicket(user, state) {
             ],
         });
         
+        addAuditEntry('TICKET_CREATED', user.tag, `Tech ticket #${ticketNumber} - ${state.description.substring(0, 50)}...`);
+        
         const embed = new Discord.EmbedBuilder()
             .setColor('#00FF00')
             .setTitle('💻 Tech Support Ticket')
@@ -445,10 +546,101 @@ async function handleStaffCommands(message) {
     const args = message.content.slice(1).trim().split(/ +/);
     const command = args[0].toLowerCase();
     
+    if (command === 'config') {
+        const configEmbed = new Discord.EmbedBuilder()
+            .setColor('#5865F2')
+            .setTitle('⚙️ Bot Configuration Status')
+            .addFields(
+                { name: 'YouTube API Key', value: CONFIG.YOUTUBE_API_KEY ? '✅ Set' : '❌ Not set' },
+                { name: 'YouTube Channel ID', value: CONFIG.YOUTUBE_CHANNEL_ID ? '✅ Set' : '❌ Not set' },
+                { name: 'Main Chat Channel', value: CONFIG.MAIN_CHAT_CHANNEL_ID ? `✅ <#${CONFIG.MAIN_CHAT_CHANNEL_ID}>` : '❌ Not set' },
+                { name: 'Announcement Channel', value: CONFIG.ANNOUNCEMENT_CHANNEL_ID ? `✅ <#${CONFIG.ANNOUNCEMENT_CHANNEL_ID}>` : '❌ Not set' },
+                { name: 'Mod Channel', value: CONFIG.MOD_CHANNEL_ID ? `✅ <#${CONFIG.MOD_CHANNEL_ID}>` : '❌ Not set' },
+                { name: 'Log Channel', value: CONFIG.LOG_CHANNEL_ID ? `✅ <#${CONFIG.LOG_CHANNEL_ID}>` : '❌ Not set' },
+                { name: 'Ticket Category', value: CONFIG.TICKET_CATEGORY_ID ? '✅ Set' : '❌ Not set' },
+                { name: 'Staff Role IDs', value: CONFIG.STAFF_ROLE_IDS.length > 0 ? `✅ ${CONFIG.STAFF_ROLE_IDS.length} role(s)` : '❌ Not set' }
+            );
+        await message.reply({ embeds: [configEmbed] });
+        return;
+    }
+    
     if (command === 'checklive') {
         await message.reply('🔍 Checking YouTube for live streams...');
-        await checkYouTubeStreams();
-        await message.channel.send('✅ Stream check complete! Any upcoming or live streams have been processed.');
+        
+        if (!CONFIG.YOUTUBE_API_KEY || !CONFIG.YOUTUBE_CHANNEL_ID) {
+            await message.channel.send('❌ YouTube API not configured. Set YOUTUBE_API_KEY and YOUTUBE_CHANNEL_ID in Railway.');
+            return;
+        }
+        
+        try {
+            // Check for upcoming streams
+            const upcomingResponse = await fetch(
+                `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${CONFIG.YOUTUBE_CHANNEL_ID}&eventType=upcoming&type=video&key=${CONFIG.YOUTUBE_API_KEY}`
+            );
+            const upcomingData = await upcomingResponse.json();
+            
+            // Check for live streams
+            const liveResponse = await fetch(
+                `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${CONFIG.YOUTUBE_CHANNEL_ID}&eventType=live&type=video&key=${CONFIG.YOUTUBE_API_KEY}`
+            );
+            const liveData = await liveResponse.json();
+            
+            const mainChannel = CONFIG.MAIN_CHAT_CHANNEL_ID ? await client.channels.fetch(CONFIG.MAIN_CHAT_CHANNEL_ID) : message.channel;
+            
+            // Handle live streams
+            if (liveData.items && liveData.items.length > 0) {
+                for (const video of liveData.items) {
+                    const streamUrl = `https://www.youtube.com/watch?v=${video.id.videoId}`;
+                    const embed = new Discord.EmbedBuilder()
+                        .setColor('#FF0000')
+                        .setTitle('🔴 LIVE NOW!')
+                        .setDescription(`**${video.snippet.title}**\n\n[Watch on YouTube](${streamUrl})`)
+                        .setThumbnail(video.snippet.thumbnails.high.url)
+                        .setTimestamp();
+                    
+                    await mainChannel.send({ embeds: [embed] });
+                }
+                await message.channel.send(`✅ Found ${liveData.items.length} live stream(s)! Posted to main chat.`);
+                return;
+            }
+            
+            // Handle upcoming streams
+            if (upcomingData.items && upcomingData.items.length > 0) {
+                const videoIds = upcomingData.items.map(item => item.id.videoId).join(',');
+                const detailsResponse = await fetch(
+                    `https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails,snippet&id=${videoIds}&key=${CONFIG.YOUTUBE_API_KEY}`
+                );
+                const detailsData = await detailsResponse.json();
+                
+                for (const video of detailsData.items) {
+                    if (video.liveStreamingDetails && video.liveStreamingDetails.scheduledStartTime) {
+                        const scheduledTime = new Date(video.liveStreamingDetails.scheduledStartTime);
+                        const now = new Date();
+                        const hoursUntil = Math.floor((scheduledTime - now) / 1000 / 60 / 60);
+                        const minutesUntil = Math.floor((scheduledTime - now) / 1000 / 60) % 60;
+                        
+                        const streamUrl = `https://www.youtube.com/watch?v=${video.id}`;
+                        const embed = new Discord.EmbedBuilder()
+                            .setColor('#FF0000')
+                            .setTitle('📅 Upcoming Stream')
+                            .setDescription(`**${video.snippet.title}**\n\n⏰ Starts in: **${hoursUntil}h ${minutesUntil}m**\n\n[Watch on YouTube](${streamUrl})`)
+                            .setThumbnail(video.snippet.thumbnails.high.url)
+                            .setTimestamp(scheduledTime);
+                        
+                        await mainChannel.send({ embeds: [embed] });
+                    }
+                }
+                await message.channel.send(`✅ Found ${detailsData.items.length} upcoming stream(s)! Posted to main chat.`);
+                return;
+            }
+            
+            await message.channel.send('✅ No live or upcoming streams found.');
+            
+        } catch (error) {
+            console.error('Error in checklive command:', error);
+            await message.channel.send('❌ Error checking streams: ' + error.message);
+        }
+        return;
     }
     
     if (command === 'online') {
@@ -532,7 +724,7 @@ async function sendHelpMessage(message) {
         .addFields(
             { name: '📊 Role Management', value: '`!dashboard` - Generate HTML permissions dashboard\n`!role` - Select role to manage\n`!permission` - Modify permissions' },
             { name: '🎫 Ticket System', value: 'DM the bot to create a ticket' },
-            { name: '⚙️ Staff Commands', value: '`!checklive` - Check YouTube streams\n`!online` / `!offline` - Set bot status\n`!close` - Close ticket channel' }
+            { name: '⚙️ Staff Commands', value: '`!config` - Check bot configuration\n`!checklive` - Check YouTube streams\n`!online` / `!offline` - Set bot status\n`!close` - Close ticket channel' }
         );
 
     await message.reply({ embeds: [embed] });
@@ -705,15 +897,485 @@ function generateHTML(data) {
 }
 
 function startKeepAliveServer() {
-    const server = http.createServer((req, res) => {
+    const server = http.createServer(async (req, res) => {
+        // Parse URL and method
+        const url = new URL(req.url, `http://${req.headers.host}`);
+        const pathname = url.pathname;
+        
+        // CORS headers for API requests
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+        
+        if (req.method === 'OPTIONS') {
+            res.writeHead(200);
+            res.end();
+            return;
+        }
+        
+        // API: Get audit log
+        if (pathname === '/api/audit-log' && req.method === 'GET') {
+            const password = url.searchParams.get('password');
+            if (password !== CONFIG.WEB_DASHBOARD_PASSWORD) {
+                res.writeHead(401, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Invalid password' }));
+                return;
+            }
+            
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ 
+                logs: auditLog.slice(0, 100), // Last 100 entries
+                botStatus: client.user ? 'online' : 'offline',
+                botTag: client.user?.tag || 'Not connected'
+            }));
+            return;
+        }
+        
+        // API: Send message to main chat
+        if (pathname === '/api/send-message' && req.method === 'POST') {
+            let body = '';
+            req.on('data', chunk => { body += chunk; });
+            req.on('end', async () => {
+                try {
+                    const data = JSON.parse(body);
+                    
+                    if (data.password !== CONFIG.WEB_DASHBOARD_PASSWORD) {
+                        res.writeHead(401, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: 'Invalid password' }));
+                        return;
+                    }
+                    
+                    if (!CONFIG.MAIN_CHAT_CHANNEL_ID) {
+                        res.writeHead(400, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: 'MAIN_CHAT_CHANNEL_ID not configured' }));
+                        return;
+                    }
+                    
+                    const mainChannel = await client.channels.fetch(CONFIG.MAIN_CHAT_CHANNEL_ID);
+                    await mainChannel.send(data.message);
+                    
+                    addAuditEntry('MESSAGE_SENT', 'Web Dashboard', `Sent to main chat: ${data.message.substring(0, 50)}...`);
+                    
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: true, message: 'Message sent!' }));
+                } catch (error) {
+                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: error.message }));
+                }
+            });
+            return;
+        }
+        
+        // Main dashboard HTML
+        if (pathname === '/' || pathname === '/dashboard') {
+            res.writeHead(200, { 'Content-Type': 'text/html' });
+            res.end(generateDashboardHTML());
+            return;
+        }
+        
+        // Default: bot status
         res.writeHead(200, { 'Content-Type': 'text/plain' });
-        res.end(`Bot Online: ${client.user?.tag || 'Starting...'}\nUptime: ${process.uptime()} seconds`);
+        res.end(`Bot Online: ${client.user?.tag || 'Starting...'}\nUptime: ${Math.floor(process.uptime())} seconds\nAudit Entries: ${auditLog.length}`);
     });
 
     const PORT = process.env.PORT || 10000;
     server.listen(PORT, () => {
-        console.log(`✅ Keep-alive server running on port ${PORT}`);
+        console.log(`✅ Web dashboard running on port ${PORT}`);
+        console.log(`📊 Access at: http://localhost:${PORT}/dashboard`);
     });
+}
+
+function generateDashboardHTML() {
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Discord Bot Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .login-box, .dashboard {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        
+        .login-box {
+            max-width: 400px;
+            margin: 100px auto;
+        }
+        
+        h1 {
+            color: #5865F2;
+            margin-bottom: 20px;
+        }
+        
+        h2 {
+            color: #333;
+            margin: 30px 0 15px 0;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #5865F2;
+        }
+        
+        .input-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        input[type="password"],
+        input[type="text"],
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: #5865F2;
+        }
+        
+        textarea {
+            min-height: 100px;
+            resize: vertical;
+            font-family: inherit;
+        }
+        
+        button {
+            background: #5865F2;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        button:hover {
+            background: #4752c4;
+        }
+        
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+        
+        .status-online {
+            background: #43b581;
+            color: white;
+        }
+        
+        .status-offline {
+            background: #f04747;
+            color: white;
+        }
+        
+        .audit-log {
+            background: #f7f7f7;
+            border-radius: 8px;
+            padding: 15px;
+            max-height: 500px;
+            overflow-y: auto;
+            margin-top: 15px;
+        }
+        
+        .audit-entry {
+            background: white;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 6px;
+            border-left: 4px solid #5865F2;
+        }
+        
+        .audit-entry.address {
+            border-left-color: #f04747;
+        }
+        
+        .audit-entry.ticket {
+            border-left-color: #43b581;
+        }
+        
+        .audit-entry.message {
+            border-left-color: #faa61a;
+        }
+        
+        .audit-timestamp {
+            font-size: 12px;
+            color: #999;
+            margin-bottom: 5px;
+        }
+        
+        .audit-action {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 3px;
+        }
+        
+        .audit-details {
+            font-size: 13px;
+            color: #666;
+        }
+        
+        .message-form {
+            background: #f7f7f7;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+        
+        .alert {
+            padding: 12px;
+            border-radius: 6px;
+            margin-top: 15px;
+        }
+        
+        .alert-success {
+            background: #43b581;
+            color: white;
+        }
+        
+        .alert-error {
+            background: #f04747;
+            color: white;
+        }
+        
+        .refresh-btn {
+            background: #43b581;
+            font-size: 12px;
+            padding: 8px 16px;
+            float: right;
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .loading {
+            animation: pulse 1.5s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Login Box -->
+        <div id="loginBox" class="login-box">
+            <h1>🤖 Bot Dashboard Login</h1>
+            <div class="input-group">
+                <label for="password">Dashboard Password</label>
+                <input type="password" id="password" placeholder="Enter dashboard password">
+            </div>
+            <button onclick="login()">Login</button>
+            <div id="loginError" class="alert alert-error hidden" style="margin-top: 15px;"></div>
+        </div>
+        
+        <!-- Main Dashboard -->
+        <div id="dashboard" class="dashboard hidden">
+            <h1>🤖 Discord Bot Dashboard
+                <span id="statusBadge" class="status-badge status-offline">Offline</span>
+                <button class="refresh-btn" onclick="loadAuditLog()">🔄 Refresh</button>
+            </h1>
+            
+            <h2>📝 Send Message to Main Chat</h2>
+            <div class="message-form">
+                <div class="input-group">
+                    <label for="messageText">Message</label>
+                    <textarea id="messageText" placeholder="Type your message here..."></textarea>
+                </div>
+                <button onclick="sendMessage()">Send to Main Chat</button>
+                <div id="messageAlert" class="hidden"></div>
+            </div>
+            
+            <h2>📋 Audit Log
+                <button class="refresh-btn" onclick="loadAuditLog()">🔄 Refresh</button>
+            </h2>
+            <div id="auditLog" class="audit-log">
+                <div class="loading">Loading audit log...</div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let dashboardPassword = '';
+        
+        function login() {
+            const password = document.getElementById('password').value;
+            if (!password) {
+                showLoginError('Please enter a password');
+                return;
+            }
+            
+            dashboardPassword = password;
+            
+            // Test password by loading audit log
+            loadAuditLog().then(success => {
+                if (success) {
+                    document.getElementById('loginBox').classList.add('hidden');
+                    document.getElementById('dashboard').classList.remove('hidden');
+                } else {
+                    showLoginError('Invalid password');
+                }
+            });
+        }
+        
+        function showLoginError(message) {
+            const errorDiv = document.getElementById('loginError');
+            errorDiv.textContent = message;
+            errorDiv.classList.remove('hidden');
+        }
+        
+        async function loadAuditLog() {
+            try {
+                const response = await fetch('/api/audit-log?password=' + encodeURIComponent(dashboardPassword));
+                
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        return false;
+                    }
+                    throw new Error('Failed to load audit log');
+                }
+                
+                const data = await response.json();
+                
+                // Update status badge
+                const statusBadge = document.getElementById('statusBadge');
+                if (data.botStatus === 'online') {
+                    statusBadge.textContent = 'Online: ' + data.botTag;
+                    statusBadge.className = 'status-badge status-online';
+                } else {
+                    statusBadge.textContent = 'Offline';
+                    statusBadge.className = 'status-badge status-offline';
+                }
+                
+                // Render audit log
+                const auditLogDiv = document.getElementById('auditLog');
+                if (data.logs.length === 0) {
+                    auditLogDiv.innerHTML = '<div style="text-align: center; color: #999;">No audit entries yet</div>';
+                } else {
+                    auditLogDiv.innerHTML = data.logs.map(entry => {
+                        const entryClass = entry.action.includes('ADDRESS') ? 'address' : 
+                                         entry.action.includes('TICKET') ? 'ticket' :
+                                         entry.action.includes('MESSAGE') ? 'message' : '';
+                        
+                        const timestamp = new Date(entry.timestamp).toLocaleString();
+                        
+                        return \`
+                            <div class="audit-entry \${entryClass}">
+                                <div class="audit-timestamp">\${timestamp}</div>
+                                <div class="audit-action">\${entry.action} - \${entry.user}</div>
+                                <div class="audit-details">\${entry.details}</div>
+                            </div>
+                        \`;
+                    }).join('');
+                }
+                
+                return true;
+            } catch (error) {
+                console.error('Error loading audit log:', error);
+                return false;
+            }
+        }
+        
+        async function sendMessage() {
+            const messageText = document.getElementById('messageText').value;
+            if (!messageText.trim()) {
+                showMessageAlert('Please enter a message', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/send-message', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        password: dashboardPassword,
+                        message: messageText
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showMessageAlert('✅ Message sent successfully!', 'success');
+                    document.getElementById('messageText').value = '';
+                    setTimeout(() => loadAuditLog(), 500); // Refresh audit log
+                } else {
+                    showMessageAlert('❌ ' + data.error, 'error');
+                }
+            } catch (error) {
+                showMessageAlert('❌ Error: ' + error.message, 'error');
+            }
+        }
+        
+        function showMessageAlert(message, type) {
+            const alertDiv = document.getElementById('messageAlert');
+            alertDiv.textContent = message;
+            alertDiv.className = 'alert alert-' + type;
+            alertDiv.classList.remove('hidden');
+            
+            setTimeout(() => {
+                alertDiv.classList.add('hidden');
+            }, 5000);
+        }
+        
+        // Auto-refresh audit log every 10 seconds if dashboard is visible
+        setInterval(() => {
+            if (!document.getElementById('dashboard').classList.contains('hidden')) {
+                loadAuditLog();
+            }
+        }, 10000);
+        
+        // Allow Enter key to login
+        document.getElementById('password').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') login();
+        });
+    </script>
+</body>
+</html>`;
 }
 
 // Login

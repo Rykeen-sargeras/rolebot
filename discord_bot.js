@@ -25,6 +25,8 @@ const CONFIG = {
     TICKET_CATEGORY_ID: process.env.TICKET_CATEGORY_ID || '',
     STAFF_ROLE_IDS: (process.env.STAFF_ROLE_IDS || '').split(',').filter(Boolean),
     WEB_DASHBOARD_PASSWORD: process.env.WEB_DASHBOARD_PASSWORD || 'admin123', // Set a secure password!
+    ALT_DETECTION_ENABLED: process.env.ALT_DETECTION_ENABLED !== 'false', // Default enabled
+    ALT_ACCOUNT_AGE_DAYS: parseInt(process.env.ALT_ACCOUNT_AGE_DAYS || '7'), // Flag accounts newer than 7 days
 };
 
 // Store user states for interactive commands and tickets
@@ -66,6 +68,44 @@ client.on('ready', () => {
     checkYouTubeStreams(); // Check immediately on startup
     
     startKeepAliveServer();
+});
+
+// Alt account detection on member join
+client.on('guildMemberAdd', async (member) => {
+    if (!CONFIG.ALT_DETECTION_ENABLED) return;
+    
+    try {
+        const accountAge = Date.now() - member.user.createdTimestamp;
+        const accountAgeDays = Math.floor(accountAge / (1000 * 60 * 60 * 24));
+        
+        // Check if account is suspiciously new
+        if (accountAgeDays < CONFIG.ALT_ACCOUNT_AGE_DAYS) {
+            const modChannel = await client.channels.fetch(CONFIG.MOD_CHANNEL_ID);
+            if (modChannel) {
+                const embed = new Discord.EmbedBuilder()
+                    .setColor('#FFA500')
+                    .setTitle('⚠️ Potential Alt Account Detected')
+                    .setThumbnail(member.user.displayAvatarURL())
+                    .addFields(
+                        { name: 'User', value: `${member.user.tag} (${member.user.id})`, inline: true },
+                        { name: 'Account Age', value: `${accountAgeDays} days old`, inline: true },
+                        { name: 'Created', value: `<t:${Math.floor(member.user.createdTimestamp / 1000)}:R>`, inline: true },
+                        { name: 'Joined', value: `<t:${Math.floor(member.joinedTimestamp / 1000)}:R>`, inline: true },
+                        { name: 'Default Avatar', value: member.user.avatar ? 'No' : '**Yes** ⚠️', inline: true },
+                        { name: 'Status', value: '🔍 Review recommended', inline: true }
+                    )
+                    .setFooter({ text: 'Alt Detection System' })
+                    .setTimestamp();
+                
+                await modChannel.send({ embeds: [embed] });
+                addAuditLog('Alt Account Detected', member.user, `Account age: ${accountAgeDays} days`, 'warning');
+            }
+        }
+        
+        addAuditLog('Member Joined', member.user, `Account age: ${accountAgeDays} days`, 'info');
+    } catch (error) {
+        console.error('Error in alt detection:', error);
+    }
 });
 
 // ======================
@@ -225,31 +265,24 @@ client.on('messageCreate', async (message) => {
     }
 });
 
-// Address detection patterns - more strict to avoid false positives
+// Address detection patterns - VERY strict to avoid false positives
 const ADDRESS_PATTERNS = [
-    // US street addresses (must have number + street type word)
-    /\b\d{1,5}\s+[\w\s]{3,50}(?:street|st|avenue|ave|road|rd|boulevard|blvd|lane|ln|drive|dr|court|ct|circle|cir|way|place|pl)\b/i,
+    // Full US street address (number + street name + street type + optional city/state/zip)
+    /\b\d{1,5}\s+[\w\s]{3,30}(?:street|st|avenue|ave|road|rd|boulevard|blvd|lane|ln|drive|dr|court|ct|way|place|pl)\b[\s,]+[\w\s]+,?\s+(?:[A-Z]{2}|\w{4,})\s*\d{5}/i,
     
-    // ZIP code ONLY if followed by USA/US context or state abbreviation
-    /\b\d{5}(?:-\d{4})?\s*(?:usa|united states|u\.s\.|us\b)/i,
-    /\b(?:AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)\s+\d{5}\b/,
+    // Address with apartment/unit AND street name
+    /\b(?:apartment|apt|unit|suite|ste)\s*#?\d+[,\s]+\d{1,5}\s+[\w\s]{3,}(?:street|st|avenue|ave|road|rd|boulevard|blvd|lane|ln|drive|dr)\b/i,
     
-    // UK postcodes (specific format)
-    /\b[A-Z]{1,2}\d{1,2}[A-Z]?\s+\d[A-Z]{2}\b.*(?:uk|united kingdom|england|scotland|wales)/i,
+    // UK full address with postcode
+    /\b\d{1,5}\s+[\w\s]{3,30}(?:street|road|lane|avenue|drive|way|close|court)\b.*\b[A-Z]{1,2}\d{1,2}[A-Z]?\s+\d[A-Z]{2}\b/i,
     
-    // Australian addresses (state + postcode)
-    /\b(?:NSW|VIC|QLD|SA|WA|TAS|NT|ACT)\s+\d{4}\b/i,
-    
-    // Address with apartment/unit indicators
-    /\b(?:apartment|apt|unit|suite|ste|floor|fl)\s*#?\d+\b.*\b(?:street|st|avenue|ave|road|rd|boulevard|blvd)\b/i,
-    
-    // Full address pattern (number + street name + city/state)
-    /\b\d{1,5}\s+[\w\s]{3,30}(?:street|st|avenue|ave|road|rd)\b,?\s+[\w\s]{3,20},?\s+(?:[A-Z]{2}|\w{4,})/i,
+    // Australian address (street + suburb + state + postcode)
+    /\b\d{1,5}\s+[\w\s]{3,30}(?:street|road|avenue|drive|st|rd|ave|dr)\b[\s,]+[\w\s]{3,20}[\s,]+(?:NSW|VIC|QLD|SA|WA|TAS|NT|ACT)\s+\d{4}\b/i,
 ];
 
 function detectAddress(text) {
     // Ignore if message is too short (likely not a real address)
-    if (text.length < 15) return null;
+    if (text.length < 20) return null;
     
     // Ignore if message contains whitelisted phrases (context that indicates not a real address)
     const whitelistPhrases = [
@@ -257,7 +290,10 @@ function detectAddress(text) {
         'http', 'https', 'www.', '.com', '.net', '.org',
         'discord.gg', 'youtube.com', 'twitter.com',
         'price', 'cost', '$', '€', '£', 'buy', 'sell',
-        'code', 'error', 'line', 'function'
+        'code', 'error', 'line', 'function',
+        'minute', 'hour', 'second', 'day', 'week', 'month', 'year',
+        'until', 'in', 'ago', 'time', 'timer', 'clock',
+        'stream', 'video', 'live', 'watch', 'tonight', 'today', 'tomorrow'
     ];
     
     const lowerText = text.toLowerCase();
@@ -275,10 +311,13 @@ function detectAddress(text) {
             // Ignore if it's just numbers with no context
             if (/^\d+$/.test(matchText.trim())) return null;
             
-            // Ignore if it's a single short word with numbers
-            if (matchText.length < 10 && !/(?:street|avenue|road|blvd|lane|drive)/.test(matchText.toLowerCase())) {
-                return null;
-            }
+            // Must contain multiple address components (not just street name)
+            const hasNumber = /\d{1,5}/.test(matchText);
+            const hasStreet = /(?:street|avenue|road|boulevard|lane|drive|st|ave|rd|blvd|ln|dr)/.test(matchText.toLowerCase());
+            const hasCityOrZip = /(?:[A-Z]{2}\s+\d{5}|,\s*[A-Z][a-z]+)/.test(matchText);
+            
+            // Require all three components for a valid address
+            if (!hasNumber || !hasStreet || !hasCityOrZip) return null;
             
             return matchText;
         }
@@ -950,6 +989,264 @@ function startKeepAliveServer() {
             return;
         }
         
+        // API: Send announcement
+        if (pathname === '/api/send-announcement' && req.method === 'POST') {
+            let body = '';
+            req.on('data', chunk => { body += chunk; });
+            req.on('end', async () => {
+                try {
+                    const data = JSON.parse(body);
+                    
+                    if (data.password !== CONFIG.WEB_DASHBOARD_PASSWORD) {
+                        res.writeHead(401, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: 'Invalid password' }));
+                        return;
+                    }
+                    
+                    if (!CONFIG.ANNOUNCEMENT_CHANNEL_ID) {
+                        res.writeHead(400, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: 'ANNOUNCEMENT_CHANNEL_ID not configured' }));
+                        return;
+                    }
+                    
+                    const announcementChannel = await client.channels.fetch(CONFIG.ANNOUNCEMENT_CHANNEL_ID);
+                    
+                    const embed = new Discord.EmbedBuilder()
+                        .setColor('#5865F2')
+                        .setTitle('📢 Announcement')
+                        .setDescription(data.message)
+                        .setTimestamp()
+                        .setFooter({ text: 'Posted from Web Dashboard' });
+                    
+                    const msg = await announcementChannel.send({ 
+                        content: data.pingEveryone ? '@everyone' : null,
+                        embeds: [embed] 
+                    });
+                    
+                    // Try to publish if it's an announcement channel
+                    if (msg.crosspostable) {
+                        await msg.crosspost();
+                    }
+                    
+                    addAuditLog('Announcement Posted', { tag: 'Web Dashboard', id: 'web' }, `Posted announcement: ${data.message.substring(0, 50)}...`, 'success');
+                    
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: true, message: 'Announcement posted!' }));
+                } catch (error) {
+                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: error.message }));
+                }
+            });
+            return;
+        }
+        
+        // API: Get role permissions
+        if (pathname === '/api/roles' && req.method === 'GET') {
+            const password = url.searchParams.get('password');
+            if (password !== CONFIG.WEB_DASHBOARD_PASSWORD) {
+                res.writeHead(401, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Invalid password' }));
+                return;
+            }
+            
+            try {
+                const guild = client.guilds.cache.first();
+                if (!guild) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'Bot not in any server' }));
+                    return;
+                }
+                
+                const rolesData = await collectServerData(guild);
+                
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify(rolesData));
+            } catch (error) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: error.message }));
+            }
+            return;
+        }
+        
+        // API: Search users
+        if (pathname === '/api/users/search' && req.method === 'GET') {
+            const password = url.searchParams.get('password');
+            const query = url.searchParams.get('query');
+            
+            if (password !== CONFIG.WEB_DASHBOARD_PASSWORD) {
+                res.writeHead(401, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Invalid password' }));
+                return;
+            }
+            
+            try {
+                const guild = client.guilds.cache.first();
+                if (!guild) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'Bot not in any server' }));
+                    return;
+                }
+                
+                await guild.members.fetch();
+                
+                let results = [];
+                if (query) {
+                    const lowerQuery = query.toLowerCase();
+                    results = guild.members.cache.filter(member => {
+                        return member.user.tag.toLowerCase().includes(lowerQuery) ||
+                               member.user.id === query ||
+                               member.displayName.toLowerCase().includes(lowerQuery);
+                    }).map(member => ({
+                        id: member.user.id,
+                        tag: member.user.tag,
+                        displayName: member.displayName,
+                        avatar: member.user.displayAvatarURL(),
+                        joinedAt: member.joinedTimestamp,
+                        accountCreatedAt: member.user.createdTimestamp,
+                        roles: member.roles.cache.map(r => ({ id: r.id, name: r.name, color: r.hexColor })),
+                        timedOut: member.communicationDisabledUntilTimestamp ? member.communicationDisabledUntilTimestamp > Date.now() : false,
+                        timeoutUntil: member.communicationDisabledUntilTimestamp
+                    })).slice(0, 20); // Limit to 20 results
+                }
+                
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ users: results }));
+            } catch (error) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: error.message }));
+            }
+            return;
+        }
+        
+        // API: User action (timeout, kick, ban)
+        if (pathname === '/api/users/action' && req.method === 'POST') {
+            let body = '';
+            req.on('data', chunk => { body += chunk; });
+            req.on('end', async () => {
+                try {
+                    const data = JSON.parse(body);
+                    
+                    if (data.password !== CONFIG.WEB_DASHBOARD_PASSWORD) {
+                        res.writeHead(401, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: 'Invalid password' }));
+                        return;
+                    }
+                    
+                    const guild = client.guilds.cache.first();
+                    const member = await guild.members.fetch(data.userId);
+                    
+                    let result = '';
+                    
+                    switch(data.action) {
+                        case 'timeout':
+                            const duration = parseInt(data.duration) || 60; // minutes
+                            await member.timeout(duration * 60 * 1000, data.reason || 'Timed out from web dashboard');
+                            result = `Timed out for ${duration} minutes`;
+                            addAuditLog('User Timed Out', { tag: 'Web Dashboard', id: 'web' }, `${member.user.tag} timed out for ${duration} minutes`, 'warning');
+                            break;
+                            
+                        case 'untimeout':
+                            await member.timeout(null);
+                            result = 'Timeout removed';
+                            addAuditLog('Timeout Removed', { tag: 'Web Dashboard', id: 'web' }, `${member.user.tag} timeout removed`, 'success');
+                            break;
+                            
+                        case 'kick':
+                            await member.kick(data.reason || 'Kicked from web dashboard');
+                            result = 'User kicked';
+                            addAuditLog('User Kicked', { tag: 'Web Dashboard', id: 'web' }, `${member.user.tag} kicked`, 'warning');
+                            break;
+                            
+                        case 'ban':
+                            await guild.members.ban(data.userId, { reason: data.reason || 'Banned from web dashboard' });
+                            result = 'User banned';
+                            addAuditLog('User Banned', { tag: 'Web Dashboard', id: 'web' }, `${member.user.tag} banned`, 'error');
+                            break;
+                            
+                        default:
+                            throw new Error('Invalid action');
+                    }
+                    
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: true, message: result }));
+                } catch (error) {
+                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: error.message }));
+                }
+            });
+            return;
+        }
+        
+        // API: Quick actions
+        if (pathname === '/api/quick-action' && req.method === 'POST') {
+            let body = '';
+            req.on('data', chunk => { body += chunk; });
+            req.on('end', async () => {
+                try {
+                    const data = JSON.parse(body);
+                    
+                    if (data.password !== CONFIG.WEB_DASHBOARD_PASSWORD) {
+                        res.writeHead(401, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: 'Invalid password' }));
+                        return;
+                    }
+                    
+                    let result = '';
+                    
+                    switch(data.action) {
+                        case 'check-stream':
+                            await checkYouTubeStreams();
+                            result = 'Stream check completed';
+                            addAuditLog('Stream Check', { tag: 'Web Dashboard', id: 'web' }, 'Manual stream check triggered', 'info');
+                            break;
+                            
+                        case 'set-online':
+                            await client.user.setStatus('online');
+                            result = 'Bot status set to online';
+                            addAuditLog('Status Changed', { tag: 'Web Dashboard', id: 'web' }, 'Bot status: online', 'info');
+                            break;
+                            
+                        case 'set-offline':
+                            await client.user.setStatus('invisible');
+                            result = 'Bot status set to offline';
+                            addAuditLog('Status Changed', { tag: 'Web Dashboard', id: 'web' }, 'Bot status: offline', 'info');
+                            break;
+                            
+                        case 'clear-audit':
+                            const count = auditLog.length;
+                            auditLog.length = 0;
+                            result = `Cleared ${count} audit entries`;
+                            addAuditLog('Audit Log Cleared', { tag: 'Web Dashboard', id: 'web' }, `Cleared ${count} entries`, 'info');
+                            break;
+                            
+                        case 'get-stats':
+                            const guild = client.guilds.cache.first();
+                            const stats = {
+                                totalMembers: guild.memberCount,
+                                onlineMembers: guild.members.cache.filter(m => m.presence?.status !== 'offline').size,
+                                roles: guild.roles.cache.size,
+                                channels: guild.channels.cache.size,
+                                auditEntries: auditLog.length,
+                                botUptime: Math.floor(process.uptime())
+                            };
+                            res.writeHead(200, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ success: true, stats }));
+                            return;
+                            
+                        default:
+                            throw new Error('Invalid action');
+                    }
+                    
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: true, message: result }));
+                } catch (error) {
+                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: error.message }));
+                }
+            });
+            return;
+        }
+        
         // Main dashboard HTML
         if (pathname === '/' || pathname === '/dashboard') {
             res.writeHead(200, { 'Content-Type': 'text/html' });
@@ -969,6 +1266,7 @@ function startKeepAliveServer() {
     });
 }
 
+// Dashboard HTML function starts here
 function generateDashboardHTML() {
     return `<!DOCTYPE html>
 <html lang="en">
@@ -976,390 +1274,605 @@ function generateDashboardHTML() {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Discord Bot Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        :root {
+            --bg-primary: #0f0f0f;
+            --bg-secondary: #1a1a1a;
+            --bg-tertiary: #242424;
+            --bg-hover: #2a2a2a;
+            --accent: #5865f2;
+            --accent-hover: #4752c4;
+            --success: #3ba55d;
+            --warning: #faa81a;
+            --danger: #ed4245;
+            --text-primary: #ffffff;
+            --text-secondary: #b9bbbe;
+            --text-muted: #72767d;
+            --border: #2f3136;
         }
         
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
         }
         
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
         
-        .login-box, .dashboard {
-            background: white;
-            border-radius: 12px;
-            padding: 30px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-        }
+        .login-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+        .login-box { background: var(--bg-secondary); border-radius: 16px; padding: 40px; width: 100%; max-width: 420px; border: 1px solid var(--border); }
+        .login-box h1 { font-size: 28px; margin-bottom: 8px; font-weight: 700; }
+        .login-box p { color: var(--text-secondary); margin-bottom: 24px; }
         
-        .login-box {
-            max-width: 400px;
-            margin: 100px auto;
-        }
+        .header { background: var(--bg-secondary); border-radius: 12px; padding: 20px 24px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--border); }
+        .header-left { display: flex; align-items: center; gap: 16px; }
+        .bot-status { display: flex; align-items: center; gap: 8px; background: var(--bg-tertiary); padding: 8px 16px; border-radius: 8px; }
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--success); animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
         
-        h1 {
-            color: #5865F2;
-            margin-bottom: 20px;
-        }
+        .tabs { display: flex; gap: 8px; margin-bottom: 24px; background: var(--bg-secondary); padding: 8px; border-radius: 12px; border: 1px solid var(--border); overflow-x: auto; }
+        .tab { padding: 12px 24px; background: transparent; border: none; color: var(--text-secondary); cursor: pointer; border-radius: 8px; font-weight: 500; transition: all 0.2s; white-space: nowrap; font-size: 14px; }
+        .tab:hover { background: var(--bg-hover); color: var(--text-primary); }
+        .tab.active { background: var(--accent); color: white; }
         
-        h2 {
-            color: #333;
-            margin: 30px 0 15px 0;
-            padding-bottom: 10px;
-            border-bottom: 2px solid #5865F2;
-        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
         
-        .input-group {
-            margin-bottom: 20px;
-        }
+        .card { background: var(--bg-secondary); border-radius: 12px; padding: 24px; margin-bottom: 20px; border: 1px solid var(--border); }
+        .card h2 { font-size: 18px; margin-bottom: 16px; font-weight: 600; }
         
-        label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 600;
-            color: #333;
-        }
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; margin-bottom: 8px; color: var(--text-secondary); font-size: 14px; font-weight: 500; }
         
-        input[type="password"],
-        input[type="text"],
-        textarea {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #ddd;
-            border-radius: 6px;
-            font-size: 14px;
-            transition: border-color 0.3s;
+        input[type="text"], input[type="password"], input[type="number"], textarea, select {
+            width: 100%; padding: 12px 16px; background: var(--bg-tertiary); border: 1px solid var(--border);
+            border-radius: 8px; color: var(--text-primary); font-family: inherit; font-size: 14px; transition: all 0.2s;
         }
+        input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent); background: var(--bg-primary); }
+        textarea { resize: vertical; min-height: 120px; }
         
-        input:focus, textarea:focus {
-            outline: none;
-            border-color: #5865F2;
-        }
+        .btn { padding: 12px 24px; border: none; border-radius: 8px; font-weight: 500; cursor: pointer; transition: all 0.2s; font-size: 14px; font-family: inherit; }
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-primary:hover { background: var(--accent-hover); }
+        .btn-success { background: var(--success); color: white; }
+        .btn-warning { background: var(--warning); color: white; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-secondary { background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border); }
+        .btn-secondary:hover { background: var(--bg-hover); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
         
-        textarea {
-            min-height: 100px;
-            resize: vertical;
-            font-family: inherit;
-        }
+        .checkbox-group { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+        .checkbox-group input[type="checkbox"] { width: auto; }
         
-        button {
-            background: #5865F2;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 6px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background 0.3s;
-        }
+        .alert { padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; display: none; }
+        .alert.show { display: block; }
+        .alert-success { background: rgba(59, 165, 93, 0.1); border: 1px solid var(--success); color: var(--success); }
+        .alert-error { background: rgba(237, 66, 69, 0.1); border: 1px solid var(--danger); color: var(--danger); }
         
-        button:hover {
-            background: #4752c4;
-        }
+        .audit-entry { background: var(--bg-tertiary); padding: 16px; border-radius: 8px; margin-bottom: 12px; border-left: 3px solid var(--accent); }
+        .audit-entry.warning { border-left-color: var(--warning); }
+        .audit-entry.error { border-left-color: var(--danger); }
+        .audit-entry.success { border-left-color: var(--success); }
+        .audit-header { display: flex; justify-content: space-between; margin-bottom: 8px; }
+        .audit-time { color: var(--text-muted); font-size: 12px; }
+        .audit-action { font-weight: 600; font-size: 14px; }
+        .audit-user { color: var(--text-secondary); font-size: 13px; }
+        .audit-details { color: var(--text-secondary); font-size: 13px; margin-top: 4px; }
         
-        button:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-        }
+        .user-card { background: var(--bg-tertiary); border-radius: 8px; padding: 16px; margin-bottom: 12px; display: flex; gap: 16px; align-items: flex-start; }
+        .user-avatar { width: 64px; height: 64px; border-radius: 50%; flex-shrink: 0; }
+        .user-info { flex: 1; }
+        .user-tag { font-weight: 600; font-size: 16px; margin-bottom: 4px; }
+        .user-id { color: var(--text-muted); font-size: 12px; margin-bottom: 8px; }
+        .user-meta { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
+        .user-meta-item { font-size: 13px; color: var(--text-secondary); }
+        .user-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        .user-actions .btn { padding: 8px 16px; font-size: 13px; }
         
-        .status-badge {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: 600;
-            margin-left: 10px;
-        }
+        .quick-actions-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+        .quick-action-btn { background: var(--bg-tertiary); border: 1px solid var(--border); padding: 20px; border-radius: 8px; cursor: pointer; transition: all 0.2s; text-align: center; }
+        .quick-action-btn:hover { background: var(--bg-hover); border-color: var(--accent); }
+        .quick-action-icon { font-size: 32px; margin-bottom: 8px; }
+        .quick-action-label { font-weight: 500; font-size: 14px; }
         
-        .status-online {
-            background: #43b581;
-            color: white;
-        }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin-top: 20px; }
+        .stat-card { background: var(--bg-tertiary); padding: 20px; border-radius: 8px; text-align: center; }
+        .stat-value { font-size: 28px; font-weight: 700; color: var(--accent); }
+        .stat-label { color: var(--text-secondary); font-size: 13px; margin-top: 4px; }
         
-        .status-offline {
-            background: #f04747;
-            color: white;
-        }
+        .role-item { background: var(--bg-tertiary); padding: 16px; border-radius: 8px; margin-bottom: 12px; }
+        .role-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .role-name { font-weight: 600; display: flex; align-items: center; gap: 8px; }
+        .role-badge { width: 12px; height: 12px; border-radius: 50%; }
+        .role-members { color: var(--text-muted); font-size: 13px; }
+        .permissions-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; margin-top: 12px; }
+        .permission-item { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary); }
         
-        .audit-log {
-            background: #f7f7f7;
-            border-radius: 8px;
-            padding: 15px;
-            max-height: 500px;
-            overflow-y: auto;
-            margin-top: 15px;
-        }
+        .hidden { display: none !important; }
+        .text-success { color: var(--success); }
+        .text-warning { color: var(--warning); }
+        .text-danger { color: var(--danger); }
+        .mt-2 { margin-top: 8px; }
+        .mb-2 { margin-bottom: 8px; }
         
-        .audit-entry {
-            background: white;
-            padding: 12px;
-            margin-bottom: 10px;
-            border-radius: 6px;
-            border-left: 4px solid #5865F2;
-        }
+        .loading { text-align: center; padding: 40px; color: var(--text-muted); }
         
-        .audit-entry.address {
-            border-left-color: #f04747;
-        }
-        
-        .audit-entry.ticket {
-            border-left-color: #43b581;
-        }
-        
-        .audit-entry.message {
-            border-left-color: #faa61a;
-        }
-        
-        .audit-timestamp {
-            font-size: 12px;
-            color: #999;
-            margin-bottom: 5px;
-        }
-        
-        .audit-action {
-            font-weight: 600;
-            color: #333;
-            margin-bottom: 3px;
-        }
-        
-        .audit-details {
-            font-size: 13px;
-            color: #666;
-        }
-        
-        .message-form {
-            background: #f7f7f7;
-            padding: 20px;
-            border-radius: 8px;
-            margin-top: 15px;
-        }
-        
-        .alert {
-            padding: 12px;
-            border-radius: 6px;
-            margin-top: 15px;
-        }
-        
-        .alert-success {
-            background: #43b581;
-            color: white;
-        }
-        
-        .alert-error {
-            background: #f04747;
-            color: white;
-        }
-        
-        .refresh-btn {
-            background: #43b581;
-            font-size: 12px;
-            padding: 8px 16px;
-            float: right;
-        }
-        
-        .hidden {
-            display: none;
-        }
-        
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-        
-        .loading {
-            animation: pulse 1.5s infinite;
+        @media (max-width: 768px) {
+            .container { padding: 12px; }
+            .header { flex-direction: column; gap: 12px; }
+            .tabs { overflow-x: scroll; }
+            .quick-actions-grid { grid-template-columns: 1fr 1fr; }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <!-- Login Box -->
-        <div id="loginBox" class="login-box">
-            <h1>🤖 Bot Dashboard Login</h1>
-            <div class="input-group">
-                <label for="password">Dashboard Password</label>
-                <input type="password" id="password" placeholder="Enter dashboard password">
+    <div id="loginScreen" class="login-screen">
+        <div class="login-box">
+            <h1>🤖 Bot Dashboard</h1>
+            <p>Enter password to access dashboard</p>
+            <div id="loginAlert" class="alert"></div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" id="loginPassword" placeholder="Enter dashboard password">
             </div>
-            <button onclick="login()">Login</button>
-            <div id="loginError" class="alert alert-error hidden" style="margin-top: 15px;"></div>
+            <button class="btn btn-primary" onclick="login()" style="width: 100%;">Login</button>
         </div>
-        
-        <!-- Main Dashboard -->
-        <div id="dashboard" class="dashboard hidden">
-            <h1>🤖 Discord Bot Dashboard
-                <span id="statusBadge" class="status-badge status-offline">Offline</span>
-                <button class="refresh-btn" onclick="loadAuditLog()">🔄 Refresh</button>
-            </h1>
-            
-            <h2>📝 Send Message to Main Chat</h2>
-            <div class="message-form">
-                <div class="input-group">
-                    <label for="messageText">Message</label>
+    </div>
+
+    <div id="dashboard" class="hidden container">
+        <div class="header">
+            <div class="header-left">
+                <h1>Discord Bot Dashboard</h1>
+                <div class="bot-status">
+                    <div class="status-dot"></div>
+                    <span id="botStatus">Online</span>
+                </div>
+            </div>
+            <button class="btn btn-secondary" onclick="logout()">Logout</button>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('messages')">📨 Messages</button>
+            <button class="tab" onclick="showTab('announcements')">📢 Announcements</button>
+            <button class="tab" onclick="showTab('users')">👥 Users</button>
+            <button class="tab" onclick="showTab('actions')">⚡ Quick Actions</button>
+            <button class="tab" onclick="showTab('audit')">📋 Audit Log</button>
+            <button class="tab" onclick="showTab('roles')">🔐 Roles</button>
+        </div>
+
+        <div id="tab-messages" class="tab-content active">
+            <div class="card">
+                <h2>Send Message to Main Chat</h2>
+                <div id="messageAlert" class="alert"></div>
+                <div class="form-group">
+                    <label>Message</label>
                     <textarea id="messageText" placeholder="Type your message here..."></textarea>
                 </div>
-                <button onclick="sendMessage()">Send to Main Chat</button>
-                <div id="messageAlert" class="hidden"></div>
+                <button class="btn btn-primary" onclick="sendMessage()">Send to Main Chat</button>
             </div>
-            
-            <h2>📋 Audit Log
-                <button class="refresh-btn" onclick="loadAuditLog()">🔄 Refresh</button>
-            </h2>
-            <div id="auditLog" class="audit-log">
-                <div class="loading">Loading audit log...</div>
+        </div>
+
+        <div id="tab-announcements" class="tab-content">
+            <div class="card">
+                <h2>Post Announcement</h2>
+                <div id="announcementAlert" class="alert"></div>
+                <div class="form-group">
+                    <label>Announcement Message</label>
+                    <textarea id="announcementText" placeholder="Enter your announcement..."></textarea>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="pingEveryone">
+                    <label for="pingEveryone">Ping @everyone</label>
+                </div>
+                <button class="btn btn-primary mt-2" onclick="sendAnnouncement()">Post Announcement</button>
+            </div>
+        </div>
+
+        <div id="tab-users" class="tab-content">
+            <div class="card">
+                <h2>User Management</h2>
+                <div id="userAlert" class="alert"></div>
+                <div class="form-group">
+                    <label>Search Users</label>
+                    <input type="text" id="userSearch" placeholder="Enter username, tag, or ID...">
+                </div>
+                <button class="btn btn-primary" onclick="searchUsers()">Search</button>
+                <div id="userResults" class="mt-2"></div>
+            </div>
+        </div>
+
+        <div id="tab-actions" class="tab-content">
+            <div class="card">
+                <h2>Quick Actions</h2>
+                <div id="actionAlert" class="alert"></div>
+                <div class="quick-actions-grid">
+                    <div class="quick-action-btn" onclick="quickAction('check-stream')">
+                        <div class="quick-action-icon">🔴</div>
+                        <div class="quick-action-label">Check Stream</div>
+                    </div>
+                    <div class="quick-action-btn" onclick="quickAction('set-online')">
+                        <div class="quick-action-icon">🟢</div>
+                        <div class="quick-action-label">Set Online</div>
+                    </div>
+                    <div class="quick-action-btn" onclick="quickAction('set-offline')">
+                        <div class="quick-action-icon">⚫</div>
+                        <div class="quick-action-label">Set Offline</div>
+                    </div>
+                    <div class="quick-action-btn" onclick="quickAction('clear-audit')">
+                        <div class="quick-action-icon">🗑️</div>
+                        <div class="quick-action-label">Clear Audit</div>
+                    </div>
+                </div>
+            </div>
+            <div class="card">
+                <h2>Server Statistics</h2>
+                <button class="btn btn-secondary mb-2" onclick="loadStats()">Refresh Stats</button>
+                <div id="statsContainer" class="stats-grid"></div>
+            </div>
+        </div>
+
+        <div id="tab-audit" class="tab-content">
+            <div class="card">
+                <h2>Audit Log</h2>
+                <button class="btn btn-secondary mb-2" onclick="loadAuditLog()">Refresh</button>
+                <div id="auditLog"></div>
+            </div>
+        </div>
+
+        <div id="tab-roles" class="tab-content">
+            <div class="card">
+                <h2>Server Roles & Permissions</h2>
+                <button class="btn btn-secondary mb-2" onclick="loadRoles()">Refresh</button>
+                <div id="rolesContainer"></div>
             </div>
         </div>
     </div>
-    
+
     <script>
-        let dashboardPassword = '';
+        let password = '';
         
         function login() {
-            const password = document.getElementById('password').value;
+            password = document.getElementById('loginPassword').value;
             if (!password) {
-                showLoginError('Please enter a password');
+                showAlert('loginAlert', 'Please enter password', 'error');
                 return;
             }
-            
-            dashboardPassword = password;
-            
-            // Test password by loading audit log
-            loadAuditLog().then(success => {
-                if (success) {
-                    document.getElementById('loginBox').classList.add('hidden');
-                    document.getElementById('dashboard').classList.remove('hidden');
-                } else {
-                    showLoginError('Invalid password');
-                }
-            });
+            fetch(\`/api/audit-log?password=\${password}\`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.error) {
+                        showAlert('loginAlert', 'Invalid password', 'error');
+                    } else {
+                        document.getElementById('loginScreen').classList.add('hidden');
+                        document.getElementById('dashboard').classList.remove('hidden');
+                        document.getElementById('botStatus').textContent = data.botTag || 'Online';
+                        loadAuditLog();
+                    }
+                })
+                .catch(err => showAlert('loginAlert', 'Error: ' + err.message, 'error'));
         }
         
-        function showLoginError(message) {
-            const errorDiv = document.getElementById('loginError');
-            errorDiv.textContent = message;
-            errorDiv.classList.remove('hidden');
+        function logout() {
+            password = '';
+            document.getElementById('loginScreen').classList.remove('hidden');
+            document.getElementById('dashboard').classList.add('hidden');
+            document.getElementById('loginPassword').value = '';
+        }
+        
+        function showTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.getElementById('tab-' + tabName).classList.add('active');
+            event.target.classList.add('active');
+            if (tabName === 'audit') loadAuditLog();
+            if (tabName === 'roles') loadRoles();
+            if (tabName === 'actions') loadStats();
+        }
+        
+        function showAlert(id, message, type) {
+            const alert = document.getElementById(id);
+            alert.textContent = message;
+            alert.className = 'alert alert-' + type + ' show';
+            setTimeout(() => alert.classList.remove('show'), 5000);
+        }
+        
+        async function sendMessage() {
+            const message = document.getElementById('messageText').value;
+            if (!message) return showAlert('messageAlert', 'Please enter a message', 'error');
+            try {
+                const res = await fetch('/api/send-message', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password, message })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showAlert('messageAlert', 'Message sent!', 'success');
+                    document.getElementById('messageText').value = '';
+                } else {
+                    showAlert('messageAlert', data.error || 'Error', 'error');
+                }
+            } catch (err) {
+                showAlert('messageAlert', 'Error: ' + err.message, 'error');
+            }
+        }
+        
+        async function sendAnnouncement() {
+            const message = document.getElementById('announcementText').value;
+            const pingEveryone = document.getElementById('pingEveryone').checked;
+            if (!message) return showAlert('announcementAlert', 'Please enter announcement', 'error');
+            try {
+                const res = await fetch('/api/send-announcement', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password, message, pingEveryone })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showAlert('announcementAlert', 'Announcement posted!', 'success');
+                    document.getElementById('announcementText').value = '';
+                    document.getElementById('pingEveryone').checked = false;
+                } else {
+                    showAlert('announcementAlert', data.error || 'Error', 'error');
+                }
+            } catch (err) {
+                showAlert('announcementAlert', 'Error: ' + err.message, 'error');
+            }
+        }
+        
+        async function searchUsers() {
+            const query = document.getElementById('userSearch').value;
+            if (!query) return showAlert('userAlert', 'Enter search term', 'error');
+            try {
+                const res = await fetch(\`/api/users/search?password=\${password}&query=\${encodeURIComponent(query)}\`);
+                const data = await res.json();
+                if (data.error) return showAlert('userAlert', data.error, 'error');
+                const container = document.getElementById('userResults');
+                if (data.users.length === 0) {
+                    container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 20px;">No users found</p>';
+                    return;
+                }
+                container.innerHTML = data.users.map(user => \`
+                    <div class="user-card">
+                        <img src="\${user.avatar}" class="user-avatar" alt="Avatar">
+                        <div class="user-info">
+                            <div class="user-tag">\${user.tag}</div>
+                            <div class="user-id">ID: \${user.id}</div>
+                            <div class="user-meta">
+                                <span class="user-meta-item">Joined: \${new Date(user.joinedAt).toLocaleDateString()}</span>
+                                <span class="user-meta-item">Account: \${new Date(user.accountCreatedAt).toLocaleDateString()}</span>
+                                <span class="user-meta-item \${user.timedOut ? 'text-warning' : ''}">\${user.timedOut ? '⏱️ Timed Out' : '✅ Active'}</span>
+                            </div>
+                            <div class="user-actions">
+                                <button class="btn btn-warning" onclick="timeoutUser('\${user.id}', '\${user.tag}')">Timeout</button>
+                                \${user.timedOut ? '<button class="btn btn-success" onclick="untimeoutUser(\\''+user.id+'\\', \\''+user.tag+'\\')">Remove Timeout</button>' : ''}
+                                <button class="btn btn-danger" onclick="kickUser('\${user.id}', '\${user.tag}')">Kick</button>
+                                <button class="btn btn-danger" onclick="banUser('\${user.id}', '\${user.tag}')">Ban</button>
+                            </div>
+                        </div>
+                    </div>
+                \`).join('');
+            } catch (err) {
+                showAlert('userAlert', 'Error: ' + err.message, 'error');
+            }
+        }
+        
+        async function timeoutUser(userId, tag) {
+            const duration = prompt('Timeout duration in minutes:', '60');
+            if (!duration) return;
+            const reason = prompt('Reason (optional):', '');
+            try {
+                const res = await fetch('/api/users/action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password, userId, action: 'timeout', duration, reason })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showAlert('userAlert', \`\${tag} timed out for \${duration} minutes\`, 'success');
+                    searchUsers();
+                } else {
+                    showAlert('userAlert', data.error, 'error');
+                }
+            } catch (err) {
+                showAlert('userAlert', 'Error: ' + err.message, 'error');
+            }
+        }
+        
+        async function untimeoutUser(userId, tag) {
+            try {
+                const res = await fetch('/api/users/action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password, userId, action: 'untimeout' })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showAlert('userAlert', \`\${tag} timeout removed\`, 'success');
+                    searchUsers();
+                } else {
+                    showAlert('userAlert', data.error, 'error');
+                }
+            } catch (err) {
+                showAlert('userAlert', 'Error: ' + err.message, 'error');
+            }
+        }
+        
+        async function kickUser(userId, tag) {
+            if (!confirm(\`Kick \${tag}?\`)) return;
+            const reason = prompt('Reason (optional):', '');
+            try {
+                const res = await fetch('/api/users/action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password, userId, action: 'kick', reason })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showAlert('userAlert', \`\${tag} kicked\`, 'success');
+                    searchUsers();
+                } else {
+                    showAlert('userAlert', data.error, 'error');
+                }
+            } catch (err) {
+                showAlert('userAlert', 'Error: ' + err.message, 'error');
+            }
+        }
+        
+        async function banUser(userId, tag) {
+            if (!confirm(\`Ban \${tag}? This is permanent.\`)) return;
+            const reason = prompt('Reason (optional):', '');
+            try {
+                const res = await fetch('/api/users/action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password, userId, action: 'ban', reason })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showAlert('userAlert', \`\${tag} banned\`, 'success');
+                    searchUsers();
+                } else {
+                    showAlert('userAlert', data.error, 'error');
+                }
+            } catch (err) {
+                showAlert('userAlert', 'Error: ' + err.message, 'error');
+            }
+        }
+        
+        async function quickAction(action) {
+            try {
+                const res = await fetch('/api/quick-action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password, action })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showAlert('actionAlert', data.message || 'Action completed', 'success');
+                    if (action === 'get-stats') displayStats(data.stats);
+                } else {
+                    showAlert('actionAlert', data.error, 'error');
+                }
+            } catch (err) {
+                showAlert('actionAlert', 'Error: ' + err.message, 'error');
+            }
+        }
+        
+        async function loadStats() {
+            try {
+                const res = await fetch('/api/quick-action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password, action: 'get-stats' })
+                });
+                const data = await res.json();
+                if (data.success && data.stats) displayStats(data.stats);
+            } catch (err) {
+                console.error('Error loading stats:', err);
+            }
+        }
+        
+        function displayStats(stats) {
+            const container = document.getElementById('statsContainer');
+            const uptimeHours = Math.floor(stats.botUptime / 3600);
+            const uptimeMins = Math.floor((stats.botUptime % 3600) / 60);
+            container.innerHTML = \`
+                <div class="stat-card"><div class="stat-value">\${stats.totalMembers}</div><div class="stat-label">Total Members</div></div>
+                <div class="stat-card"><div class="stat-value">\${stats.onlineMembers}</div><div class="stat-label">Online Now</div></div>
+                <div class="stat-card"><div class="stat-value">\${stats.roles}</div><div class="stat-label">Roles</div></div>
+                <div class="stat-card"><div class="stat-value">\${stats.channels}</div><div class="stat-label">Channels</div></div>
+                <div class="stat-card"><div class="stat-value">\${stats.auditEntries}</div><div class="stat-label">Audit Entries</div></div>
+                <div class="stat-card"><div class="stat-value">\${uptimeHours}h \${uptimeMins}m</div><div class="stat-label">Bot Uptime</div></div>
+            \`;
         }
         
         async function loadAuditLog() {
             try {
-                const response = await fetch('/api/audit-log?password=' + encodeURIComponent(dashboardPassword));
-                
-                if (!response.ok) {
-                    if (response.status === 401) {
-                        return false;
-                    }
-                    throw new Error('Failed to load audit log');
-                }
-                
-                const data = await response.json();
-                
-                // Update status badge
-                const statusBadge = document.getElementById('statusBadge');
-                if (data.botStatus === 'online') {
-                    statusBadge.textContent = 'Online: ' + data.botTag;
-                    statusBadge.className = 'status-badge status-online';
-                } else {
-                    statusBadge.textContent = 'Offline';
-                    statusBadge.className = 'status-badge status-offline';
-                }
-                
-                // Render audit log
-                const auditLogDiv = document.getElementById('auditLog');
+                const res = await fetch(\`/api/audit-log?password=\${password}\`);
+                const data = await res.json();
+                if (data.error) return;
+                const container = document.getElementById('auditLog');
                 if (data.logs.length === 0) {
-                    auditLogDiv.innerHTML = '<div style="text-align: center; color: #999;">No audit entries yet</div>';
-                } else {
-                    auditLogDiv.innerHTML = data.logs.map(entry => {
-                        const entryClass = entry.action.includes('ADDRESS') ? 'address' : 
-                                         entry.action.includes('TICKET') ? 'ticket' :
-                                         entry.action.includes('MESSAGE') ? 'message' : '';
-                        
-                        const timestamp = new Date(entry.timestamp).toLocaleString();
-                        
-                        return \`
-                            <div class="audit-entry \${entryClass}">
-                                <div class="audit-timestamp">\${timestamp}</div>
-                                <div class="audit-action">\${entry.action} - \${entry.user}</div>
-                                <div class="audit-details">\${entry.details}</div>
+                    container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 20px;">No audit entries</p>';
+                    return;
+                }
+                container.innerHTML = data.logs.map(log => {
+                    const time = new Date(log.timestamp).toLocaleString();
+                    const severity = log.severity || 'info';
+                    return \`
+                        <div class="audit-entry \${severity}">
+                            <div class="audit-header">
+                                <span class="audit-action">\${log.action}</span>
+                                <span class="audit-time">\${time}</span>
                             </div>
-                        \`;
-                    }).join('');
-                }
-                
-                return true;
-            } catch (error) {
-                console.error('Error loading audit log:', error);
-                return false;
+                            <div class="audit-user">By: \${log.user}</div>
+                            <div class="audit-details">\${log.details}</div>
+                        </div>
+                    \`;
+                }).join('');
+            } catch (err) {
+                console.error('Error loading audit log:', err);
             }
         }
         
-        async function sendMessage() {
-            const messageText = document.getElementById('messageText').value;
-            if (!messageText.trim()) {
-                showMessageAlert('Please enter a message', 'error');
-                return;
-            }
-            
+        async function loadRoles() {
             try {
-                const response = await fetch('/api/send-message', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        password: dashboardPassword,
-                        message: messageText
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (response.ok) {
-                    showMessageAlert('✅ Message sent successfully!', 'success');
-                    document.getElementById('messageText').value = '';
-                    setTimeout(() => loadAuditLog(), 500); // Refresh audit log
-                } else {
-                    showMessageAlert('❌ ' + data.error, 'error');
+                const res = await fetch(\`/api/roles?password=\${password}\`);
+                const data = await res.json();
+                if (data.error) {
+                    document.getElementById('rolesContainer').innerHTML = '<p style="color: var(--text-danger);">' + data.error + '</p>';
+                    return;
                 }
-            } catch (error) {
-                showMessageAlert('❌ Error: ' + error.message, 'error');
+                const container = document.getElementById('rolesContainer');
+                if (!data.roles || data.roles.length === 0) {
+                    container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 20px;">No roles found</p>';
+                    return;
+                }
+                container.innerHTML = data.roles.map(role => \`
+                    <div class="role-item">
+                        <div class="role-header">
+                            <div class="role-name">
+                                <span class="role-badge" style="background-color: \${role.color}"></span>
+                                \${role.name}
+                            </div>
+                            <div class="role-members">\${role.members} members</div>
+                        </div>
+                        <div class="permissions-grid">
+                            \${Object.entries(role.permissions).map(([key, value]) => \`
+                                <div class="permission-item">
+                                    <span>\${value ? '✅' : '❌'}</span>
+                                    <span>\${formatPermissionName(key)}</span>
+                                </div>
+                            \`).join('')}
+                        </div>
+                    </div>
+                \`).join('');
+            } catch (err) {
+                console.error('Error loading roles:', err);
             }
         }
         
-        function showMessageAlert(message, type) {
-            const alertDiv = document.getElementById('messageAlert');
-            alertDiv.textContent = message;
-            alertDiv.className = 'alert alert-' + type;
-            alertDiv.classList.remove('hidden');
-            
-            setTimeout(() => {
-                alertDiv.classList.add('hidden');
-            }, 5000);
+        function formatPermissionName(key) {
+            return key.replace(/([A-Z])/g, ' $1').trim().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
         }
         
-        // Auto-refresh audit log every 10 seconds if dashboard is visible
         setInterval(() => {
-            if (!document.getElementById('dashboard').classList.contains('hidden')) {
-                loadAuditLog();
-            }
+            if (document.getElementById('tab-audit').classList.contains('active')) loadAuditLog();
         }, 10000);
         
-        // Allow Enter key to login
-        document.getElementById('password').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') login();
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('loginPassword').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') login();
+            });
         });
     </script>
 </body>
-</html>`;
+</html>\`;
 }
 
 // Login

@@ -29,6 +29,39 @@ const CONFIG = {
     ALT_ACCOUNT_AGE_DAYS: parseInt(process.env.ALT_ACCOUNT_AGE_DAYS || '7'), // Flag accounts newer than 7 days
 };
 
+// Fun features state
+let triviaEnabled = false;
+let triviaInterval = null;
+let currentTrivia = null;
+const triviaScores = new Map(); // userId -> score
+
+let mimicEnabled = false;
+let mimicTargetId = null;
+
+// Trivia questions database
+const triviaQuestions = [
+    { question: "What year was Discord founded?", answer: "2015", category: "Discord" },
+    { question: "What is the capital of Japan?", answer: "Tokyo", category: "Geography" },
+    { question: "How many players are on a soccer team?", answer: "11", category: "Sports" },
+    { question: "What is the largest planet in our solar system?", answer: "Jupiter", category: "Science" },
+    { question: "Who painted the Mona Lisa?", answer: "Leonardo da Vinci", category: "Art" },
+    { question: "What is the smallest country in the world?", answer: "Vatican City", category: "Geography" },
+    { question: "In what year did World War II end?", answer: "1945", category: "History" },
+    { question: "What is the speed of light in km/s?", answer: "300000", category: "Science" },
+    { question: "What is the most popular programming language in 2024?", answer: "Python", category: "Tech" },
+    { question: "How many continents are there?", answer: "7", category: "Geography" },
+    { question: "What is the chemical symbol for gold?", answer: "Au", category: "Science" },
+    { question: "Who wrote Romeo and Juliet?", answer: "Shakespeare", category: "Literature" },
+    { question: "What is the tallest mountain in the world?", answer: "Mount Everest", category: "Geography" },
+    { question: "How many bones are in the human body?", answer: "206", category: "Science" },
+    { question: "What is the largest ocean on Earth?", answer: "Pacific", category: "Geography" },
+    { question: "In what year was the first iPhone released?", answer: "2007", category: "Tech" },
+    { question: "What planet is known as the Red Planet?", answer: "Mars", category: "Science" },
+    { question: "How many strings does a guitar typically have?", answer: "6", category: "Music" },
+    { question: "What is the hardest natural substance on Earth?", answer: "Diamond", category: "Science" },
+    { question: "Who was the first person to walk on the moon?", answer: "Neil Armstrong", category: "History" },
+];
+
 // Store user states for interactive commands and tickets
 const userStates = new Map();
 const streamAlerts = new Map(); // Track which alerts have been sent
@@ -245,6 +278,40 @@ client.on('messageCreate', async (message) => {
         // Handle DM Ticket System
         await handleDMTicket(message);
         return;
+    }
+    
+    // Mimic mode - copy user's messages
+    if (mimicEnabled && message.author.id === mimicTargetId && message.channel.id === CONFIG.MAIN_CHAT_CHANNEL_ID) {
+        try {
+            await message.channel.send(message.content);
+            addAuditLog('Mimic Activated', message.author, `Copied message: ${message.content.substring(0, 50)}...`, 'info');
+        } catch (err) {
+            console.error('Mimic error:', err);
+        }
+    }
+    
+    // Trivia answer checking
+    if (currentTrivia && message.channel.id === CONFIG.MAIN_CHAT_CHANNEL_ID) {
+        const userAnswer = message.content.trim().toLowerCase();
+        const correctAnswer = currentTrivia.answer.toLowerCase();
+        
+        if (userAnswer === correctAnswer || userAnswer.includes(correctAnswer)) {
+            // Correct answer!
+            const userId = message.author.id;
+            const currentScore = triviaScores.get(userId) || 0;
+            triviaScores.set(userId, currentScore + 100);
+            
+            const embed = new Discord.EmbedBuilder()
+                .setColor('#00FF00')
+                .setTitle('🎉 Correct Answer!')
+                .setDescription(`${message.author} got it right!\n\n**Answer:** ${currentTrivia.answer}\n**Points:** +100 (Total: ${currentScore + 100})`)
+                .setTimestamp();
+            
+            await message.channel.send({ embeds: [embed] });
+            addAuditLog('Trivia Answered', message.author, `Correct answer! New score: ${currentScore + 100}`, 'success');
+            currentTrivia = null;
+            return;
+        }
     }
     
     // Check if user is staff
@@ -685,6 +752,116 @@ async function handleStaffCommands(message) {
         }
     }
     
+    // Trivia commands
+    if (command === 'trivia') {
+        const subcommand = args[1]?.toLowerCase();
+        
+        if (subcommand === 'on') {
+            if (triviaEnabled) {
+                await message.reply('⚠️ Trivia is already enabled!');
+                return;
+            }
+            triviaEnabled = true;
+            startTriviaSystem();
+            await message.reply('✅ Trivia system enabled! Questions will be posted every 25 minutes.');
+            addAuditLog('Trivia Enabled', message.author, 'Trivia system started', 'success');
+            
+        } else if (subcommand === 'off') {
+            if (!triviaEnabled) {
+                await message.reply('⚠️ Trivia is already disabled!');
+                return;
+            }
+            triviaEnabled = false;
+            if (triviaInterval) {
+                clearInterval(triviaInterval);
+                triviaInterval = null;
+            }
+            currentTrivia = null;
+            await message.reply('✅ Trivia system disabled.');
+            addAuditLog('Trivia Disabled', message.author, 'Trivia system stopped', 'info');
+            
+        } else if (subcommand === 'scores') {
+            if (triviaScores.size === 0) {
+                await message.reply('📊 No trivia scores yet!');
+                return;
+            }
+            
+            const sortedScores = Array.from(triviaScores.entries())
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10);
+            
+            const embed = new Discord.EmbedBuilder()
+                .setColor('#FFD700')
+                .setTitle('🏆 Trivia Leaderboard')
+                .setDescription(
+                    sortedScores.map((entry, index) => {
+                        const userId = entry[0];
+                        const score = entry[1];
+                        const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
+                        return `${medal} <@${userId}> - **${score}** points`;
+                    }).join('\n')
+                )
+                .setTimestamp();
+            
+            await message.reply({ embeds: [embed] });
+            
+        } else if (subcommand === 'now') {
+            await postTriviaQuestion();
+            
+        } else {
+            await message.reply('**Trivia Commands:**\n`!trivia on` - Enable trivia\n`!trivia off` - Disable trivia\n`!trivia scores` - View leaderboard\n`!trivia now` - Post question now');
+        }
+        return;
+    }
+    
+    // Mimic commands
+    if (command === 'mimic') {
+        const subcommand = args[1]?.toLowerCase();
+        
+        if (subcommand === 'on') {
+            const userId = args[2]; // User ID or mention
+            if (!userId) {
+                await message.reply('❌ Usage: `!mimic on <user_id>` or `!mimic on @user`');
+                return;
+            }
+            
+            // Extract user ID from mention or use directly
+            const targetId = userId.replace(/[<@!>]/g, '');
+            
+            try {
+                const targetUser = await client.users.fetch(targetId);
+                mimicEnabled = true;
+                mimicTargetId = targetId;
+                await message.reply(`🎭 **SECRET MODE ACTIVATED**\nMimicking: ${targetUser.tag}\n\n*This message will delete in 5 seconds...*`);
+                addAuditLog('Mimic Enabled', message.author, `Mimicking ${targetUser.tag}`, 'warning');
+                
+                // Delete the command message and reply after 5 seconds
+                setTimeout(async () => {
+                    await message.delete().catch(() => {});
+                }, 5000);
+                
+            } catch (error) {
+                await message.reply('❌ Could not find that user!');
+            }
+            
+        } else if (subcommand === 'off') {
+            if (!mimicEnabled) {
+                await message.reply('⚠️ Mimic is not active!');
+                return;
+            }
+            
+            const targetUser = await client.users.fetch(mimicTargetId);
+            mimicEnabled = false;
+            mimicTargetId = null;
+            await message.reply(`✅ Mimic mode disabled. Stopped mimicking ${targetUser.tag}`);
+            addAuditLog('Mimic Disabled', message.author, `Stopped mimicking ${targetUser.tag}`, 'info');
+            
+        } else {
+            await message.reply('**Mimic Commands:**\n`!mimic on <user_id>` - Start mimicking a user\n`!mimic off` - Stop mimicking\n\n**Note:** Mimic is SECRET - the command message auto-deletes!');
+        }
+        return;
+    }
+    
     // Role management commands still work
     if (command === 'help') {
         await sendHelpMessage(message);
@@ -700,6 +877,52 @@ async function handleStaffCommands(message) {
     
     if (command === 'permission') {
         await handlePermissionCommand(message);
+    }
+}
+
+// Trivia System Functions
+function startTriviaSystem() {
+    // Clear any existing interval
+    if (triviaInterval) {
+        clearInterval(triviaInterval);
+    }
+    
+    // Post first question immediately
+    postTriviaQuestion();
+    
+    // Then post every 25 minutes
+    triviaInterval = setInterval(() => {
+        if (triviaEnabled) {
+            postTriviaQuestion();
+        }
+    }, 25 * 60 * 1000); // 25 minutes
+}
+
+async function postTriviaQuestion() {
+    if (!CONFIG.MAIN_CHAT_CHANNEL_ID) {
+        console.log('Cannot post trivia: MAIN_CHAT_CHANNEL_ID not configured');
+        return;
+    }
+    
+    try {
+        const mainChannel = await client.channels.fetch(CONFIG.MAIN_CHAT_CHANNEL_ID);
+        
+        // Select random question
+        const randomIndex = Math.floor(Math.random() * triviaQuestions.length);
+        currentTrivia = triviaQuestions[randomIndex];
+        
+        const embed = new Discord.EmbedBuilder()
+            .setColor('#FFD700')
+            .setTitle('🧠 Trivia Time!')
+            .setDescription(`**Category:** ${currentTrivia.category}\n\n**Question:**\n${currentTrivia.question}`)
+            .setFooter({ text: 'First correct answer wins 100 points!' })
+            .setTimestamp();
+        
+        await mainChannel.send({ embeds: [embed] });
+        addAuditLog('Trivia Posted', { tag: 'System', id: 'system' }, `Question: ${currentTrivia.question}`, 'info');
+        
+    } catch (error) {
+        console.error('Error posting trivia:', error);
     }
 }
 
@@ -1227,11 +1450,91 @@ function startKeepAliveServer() {
                                 roles: guild.roles.cache.size,
                                 channels: guild.channels.cache.size,
                                 auditEntries: auditLog.length,
-                                botUptime: Math.floor(process.uptime())
+                                botUptime: Math.floor(process.uptime()),
+                                triviaEnabled: triviaEnabled,
+                                mimicEnabled: mimicEnabled,
+                                mimicTarget: mimicTargetId ? (await client.users.fetch(mimicTargetId).catch(() => null))?.tag : null
                             };
                             res.writeHead(200, { 'Content-Type': 'application/json' });
                             res.end(JSON.stringify({ success: true, stats }));
                             return;
+                            
+                        case 'trivia-on':
+                            if (triviaEnabled) {
+                                result = 'Trivia is already enabled';
+                            } else {
+                                triviaEnabled = true;
+                                startTriviaSystem();
+                                result = 'Trivia enabled! Questions every 25 minutes';
+                                addAuditLog('Trivia Enabled', { tag: 'Web Dashboard', id: 'web' }, 'Trivia system started', 'success');
+                            }
+                            break;
+                            
+                        case 'trivia-off':
+                            if (!triviaEnabled) {
+                                result = 'Trivia is already disabled';
+                            } else {
+                                triviaEnabled = false;
+                                if (triviaInterval) {
+                                    clearInterval(triviaInterval);
+                                    triviaInterval = null;
+                                }
+                                currentTrivia = null;
+                                result = 'Trivia disabled';
+                                addAuditLog('Trivia Disabled', { tag: 'Web Dashboard', id: 'web' }, 'Trivia system stopped', 'info');
+                            }
+                            break;
+                            
+                        case 'trivia-now':
+                            await postTriviaQuestion();
+                            result = 'Trivia question posted!';
+                            break;
+                            
+                        case 'trivia-scores':
+                            if (triviaScores.size === 0) {
+                                result = 'No trivia scores yet';
+                            } else {
+                                const sortedScores = Array.from(triviaScores.entries())
+                                    .sort((a, b) => b[1] - a[1])
+                                    .slice(0, 10);
+                                
+                                const scoresData = await Promise.all(sortedScores.map(async ([userId, score]) => {
+                                    const user = await client.users.fetch(userId).catch(() => null);
+                                    return { userId, tag: user?.tag || 'Unknown', score };
+                                }));
+                                
+                                res.writeHead(200, { 'Content-Type': 'application/json' });
+                                res.end(JSON.stringify({ success: true, scores: scoresData }));
+                                return;
+                            }
+                            break;
+                            
+                        case 'mimic-on':
+                            if (!data.userId) {
+                                throw new Error('User ID required');
+                            }
+                            try {
+                                const targetUser = await client.users.fetch(data.userId);
+                                mimicEnabled = true;
+                                mimicTargetId = data.userId;
+                                result = `Mimic enabled for ${targetUser.tag}`;
+                                addAuditLog('Mimic Enabled', { tag: 'Web Dashboard', id: 'web' }, `Mimicking ${targetUser.tag}`, 'warning');
+                            } catch (err) {
+                                throw new Error('User not found');
+                            }
+                            break;
+                            
+                        case 'mimic-off':
+                            if (!mimicEnabled) {
+                                result = 'Mimic is not active';
+                            } else {
+                                const targetUser = await client.users.fetch(mimicTargetId).catch(() => null);
+                                mimicEnabled = false;
+                                mimicTargetId = null;
+                                result = `Mimic disabled${targetUser ? ` (was ${targetUser.tag})` : ''}`;
+                                addAuditLog('Mimic Disabled', { tag: 'Web Dashboard', id: 'web' }, 'Mimic stopped', 'info');
+                            }
+                            break;
                             
                         default:
                             throw new Error('Invalid action');
@@ -1440,6 +1743,7 @@ function generateDashboardHTML() {
             <button class="tab" onclick="showTab('announcements')">📢 Announcements</button>
             <button class="tab" onclick="showTab('users')">👥 Users</button>
             <button class="tab" onclick="showTab('actions')">⚡ Quick Actions</button>
+            <button class="tab" onclick="showTab('fun')">🎮 Fun Features</button>
             <button class="tab" onclick="showTab('audit')">📋 Audit Log</button>
             <button class="tab" onclick="showTab('roles')">🔐 Roles</button>
         </div>
@@ -1515,6 +1819,56 @@ function generateDashboardHTML() {
             </div>
         </div>
 
+        <!-- Fun Features Tab -->
+        <div id="tab-fun" class="tab-content">
+            <div class="card">
+                <h2>🧠 Trivia System</h2>
+                <div id="triviaAlert" class="alert"></div>
+                <p style="color: var(--text-secondary); margin-bottom: 16px;">
+                    Auto-posts trivia questions every 25 minutes. First correct answer wins 100 points!
+                </p>
+                <div class="quick-actions-grid">
+                    <div class="quick-action-btn" onclick="toggleTrivia('on')">
+                        <div class="quick-action-icon">✅</div>
+                        <div class="quick-action-label">Enable Trivia</div>
+                    </div>
+                    <div class="quick-action-btn" onclick="toggleTrivia('off')">
+                        <div class="quick-action-icon">❌</div>
+                        <div class="quick-action-label">Disable Trivia</div>
+                    </div>
+                    <div class="quick-action-btn" onclick="postTriviaQuestion()">
+                        <div class="quick-action-icon">📝</div>
+                        <div class="quick-action-label">Post Question Now</div>
+                    </div>
+                    <div class="quick-action-btn" onclick="viewTriviaScores()">
+                        <div class="quick-action-icon">🏆</div>
+                        <div class="quick-action-label">View Leaderboard</div>
+                    </div>
+                </div>
+                <div id="triviaScoresContainer" style="margin-top: 20px;"></div>
+            </div>
+            
+            <div class="card">
+                <h2>🎭 Mimic Mode (SECRET)</h2>
+                <div id="mimicAlert" class="alert"></div>
+                <p style="color: var(--text-secondary); margin-bottom: 16px;">
+                    Bot secretly copies everything a user says in main chat. They won't know!
+                </p>
+                <div class="form-group">
+                    <label>Target User ID</label>
+                    <input type="text" id="mimicUserId" placeholder="Enter user ID to mimic...">
+                </div>
+                <div style="display: flex; gap: 12px;">
+                    <button class="btn btn-warning" onclick="toggleMimic('on')">🎭 Start Mimicking</button>
+                    <button class="btn btn-secondary" onclick="toggleMimic('off')">🛑 Stop Mimic</button>
+                </div>
+                <div id="mimicStatus" style="margin-top: 16px; padding: 12px; background: var(--bg-tertiary); border-radius: 8px; display: none;">
+                    <div style="color: var(--text-secondary);">Currently mimicking:</div>
+                    <div id="mimicTarget" style="color: var(--accent); font-weight: 600; margin-top: 4px;"></div>
+                </div>
+            </div>
+        </div>
+
         <div id="tab-audit" class="tab-content">
             <div class="card">
                 <h2>Audit Log</h2>
@@ -1571,6 +1925,7 @@ function generateDashboardHTML() {
             if (tabName === 'audit') loadAuditLog();
             if (tabName === 'roles') loadRoles();
             if (tabName === 'actions') loadStats();
+            if (tabName === 'fun') loadStats();
         }
         
         function showAlert(id, message, type) {
@@ -1788,7 +2143,17 @@ function generateDashboardHTML() {
                 <div class="stat-card"><div class="stat-value">\${stats.channels}</div><div class="stat-label">Channels</div></div>
                 <div class="stat-card"><div class="stat-value">\${stats.auditEntries}</div><div class="stat-label">Audit Entries</div></div>
                 <div class="stat-card"><div class="stat-value">\${uptimeHours}h \${uptimeMins}m</div><div class="stat-label">Bot Uptime</div></div>
+                <div class="stat-card"><div class="stat-value">\${stats.triviaEnabled ? '✅ ON' : '❌ OFF'}</div><div class="stat-label">Trivia System</div></div>
+                <div class="stat-card"><div class="stat-value">\${stats.mimicEnabled ? '🎭 ACTIVE' : '⚫ OFF'}</div><div class="stat-label">Mimic Mode</div></div>
             \`;
+            
+            // Update mimic status display
+            if (stats.mimicEnabled && stats.mimicTarget) {
+                document.getElementById('mimicStatus').style.display = 'block';
+                document.getElementById('mimicTarget').textContent = stats.mimicTarget;
+            } else {
+                document.getElementById('mimicStatus').style.display = 'none';
+            }
         }
         
         async function loadAuditLog() {
@@ -1857,6 +2222,115 @@ function generateDashboardHTML() {
             }
         }
         
+        // Trivia Functions
+        async function toggleTrivia(action) {
+            try {
+                const res = await fetch('/api/quick-action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password, action: `trivia-${action}` })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showAlert('triviaAlert', data.message, 'success');
+                    loadStats(); // Refresh to show trivia status
+                } else {
+                    showAlert('triviaAlert', data.error, 'error');
+                }
+            } catch (err) {
+                showAlert('triviaAlert', 'Error: ' + err.message, 'error');
+            }
+        }
+        
+        async function postTriviaQuestion() {
+            try {
+                const res = await fetch('/api/quick-action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password, action: 'trivia-now' })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showAlert('triviaAlert', 'Trivia question posted to main chat!', 'success');
+                } else {
+                    showAlert('triviaAlert', data.error, 'error');
+                }
+            } catch (err) {
+                showAlert('triviaAlert', 'Error: ' + err.message, 'error');
+            }
+        }
+        
+        async function viewTriviaScores() {
+            try {
+                const res = await fetch('/api/quick-action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password, action: 'trivia-scores' })
+                });
+                const data = await res.json();
+                if (data.success && data.scores) {
+                    const container = document.getElementById('triviaScoresContainer');
+                    if (data.scores.length === 0) {
+                        container.innerHTML = '<p style="color: var(--text-muted); text-align: center;">No scores yet!</p>';
+                        return;
+                    }
+                    container.innerHTML = `
+                        <div style="background: var(--bg-tertiary); border-radius: 8px; padding: 16px;">
+                            <h3 style="margin-bottom: 12px; color: var(--accent);">🏆 Leaderboard</h3>
+                            ${data.scores.map((entry, index) => {
+                                const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : (index + 1) + '.';
+                                return `
+                                    <div style="display: flex; justify-content: space-between; padding: 8px; background: var(--bg-primary); border-radius: 6px; margin-bottom: 8px;">
+                                        <span>${medal} ${entry.tag}</span>
+                                        <span style="color: var(--accent); font-weight: 600;">${entry.score} pts</span>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    `;
+                } else {
+                    showAlert('triviaAlert', data.error || data.message, 'error');
+                }
+            } catch (err) {
+                showAlert('triviaAlert', 'Error: ' + err.message, 'error');
+            }
+        }
+        
+        // Mimic Functions
+        async function toggleMimic(action) {
+            try {
+                let body = { password, action: `mimic-${action}` };
+                
+                if (action === 'on') {
+                    const userId = document.getElementById('mimicUserId').value;
+                    if (!userId) {
+                        showAlert('mimicAlert', 'Please enter a user ID', 'error');
+                        return;
+                    }
+                    body.userId = userId;
+                }
+                
+                const res = await fetch('/api/quick-action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showAlert('mimicAlert', data.message, 'success');
+                    loadStats(); // Refresh to show mimic status
+                    if (action === 'off') {
+                        document.getElementById('mimicStatus').style.display = 'none';
+                        document.getElementById('mimicUserId').value = '';
+                    }
+                } else {
+                    showAlert('mimicAlert', data.error, 'error');
+                }
+            } catch (err) {
+                showAlert('mimicAlert', 'Error: ' + err.message, 'error');
+            }
+        }
+        
         function formatPermissionName(key) {
             return key.replace(/([A-Z])/g, ' $1').trim().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
         }
@@ -1872,7 +2346,7 @@ function generateDashboardHTML() {
         });
     </script>
 </body>
-</html>`;
+</html>\`;
 }
 
 // Login

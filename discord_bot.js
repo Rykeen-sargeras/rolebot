@@ -2345,7 +2345,7 @@ function generateDashboardHTML() {
         });
     </script>
 </body>
-</html>\`;
+</html>`;
 }
 
 // Login

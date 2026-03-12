@@ -2572,7 +2572,6 @@ function generateDashboardHTML() {
             </div>
         </div>
 
-        <!-- Fun Features Tab -->
         <div id="tab-fun" class="tab-content">
             <div class="card">
                 <h2>🧠 Trivia System</h2>
@@ -3034,24 +3033,25 @@ function generateDashboardHTML() {
                     body: JSON.stringify({ password, action: 'trivia-scores' })
                 });
                 const data = await res.json();
-                container.innerHTML = `
+                if (data.success && data.scores) {
+                    const container = document.getElementById('triviaScoresContainer');
+                    if (data.scores.length === 0) {
+                        container.innerHTML = '<p style="color: var(--text-muted); text-align: center;">No scores yet!</p>';
+                        return;
+                    }
+                    container.innerHTML = \`
                         <div style="background: var(--bg-tertiary); border-radius: 8px; padding: 16px;">
                             <h3 style="margin-bottom: 12px; color: var(--accent);">🏆 Leaderboard</h3>
                             \${data.scores.map((entry, index) => {
                                 const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : (index + 1) + '.';
-                                return \`
+                                return \\\`
                                     <div style="display: flex; justify-content: space-between; padding: 8px; background: var(--bg-primary); border-radius: 6px; margin-bottom: 8px;">
                                         <span>\${medal} \${entry.tag}</span>
                                         <span style="color: var(--accent); font-weight: 600;">\${entry.score} pts</span>
                                     </div>
-                                \`;
+                                \\\`;
                             }).join('')}
-                        </div>`;
-                                    </div>
-                                `;
-                            }).join('')}
-                        </div>
-                    `;
+                        </div>\`;
                 } else {
                     showAlert('triviaAlert', data.error || data.message, 'error');
                 }

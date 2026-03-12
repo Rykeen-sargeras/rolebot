@@ -38,8 +38,253 @@ const triviaScores = new Map(); // userId -> score
 let mimicEnabled = false;
 let mimicTargetId = null;
 
-// Trivia questions database
+// Birthday system
+const birthdays = new Map(); // userId -> { month: 1-12, day: 1-31, username: string }
+let birthdayCheckInterval = null;
+
+// Message tracking for vibe check
+const recentMessages = []; // { timestamp, userId, content, sentiment }
+const MAX_MESSAGE_HISTORY = 1000;
+
+// Roast collection (250 roasts)
+const roasts = [
+    "I'd agree with you, but then we'd both be wrong.",
+    "You're not stupid; you just have bad luck thinking.",
+    "I'm jealous of people who haven't met you.",
+    "You're the reason the gene pool needs a lifeguard.",
+    "If I had a dollar for every brain cell you had, I'd have one dollar.",
+    "You're like a cloud. When you disappear, it's a beautiful day.",
+    "I'd challenge you to a battle of wits, but I see you're unarmed.",
+    "You're proof that evolution can go in reverse.",
+    "I've seen people like you before, but I had to pay admission.",
+    "You're the human equivalent of a participation trophy.",
+    "If laughter is the best medicine, your face must be curing the world.",
+    "You're so fake, even China denied they made you.",
+    "I'd slap you, but that would be animal abuse.",
+    "You're not the dumbest person alive, but you better hope they don't die.",
+    "I don't have the time or the crayons to explain this to you.",
+    "You bring everyone so much joy when you leave the room.",
+    "I'd tell you to go outside, but that's not even gonna help you.",
+    "Your secrets are safe with me. I wasn't even listening.",
+    "You're like Monday mornings – nobody likes you.",
+    "I'm not insulting you, I'm describing you.",
+    "You're the reason shampoo has instructions.",
+    "If you were any more inbred, you'd be a sandwich.",
+    "You're as useful as a screen door on a submarine.",
+    "I'd explain it to you, but I left my English-to-Dumbass dictionary at home.",
+    "You're living proof that birth control can fail.",
+    "I'm not saying you're stupid, I'm saying you have bad luck when thinking.",
+    "You're impossible to underestimate.",
+    "The trash gets picked up tomorrow. Be ready.",
+    "You're like a software update. Whenever I see you, I think 'Not now.'",
+    "I'd give you a nasty look, but you already have one.",
+    "You're not pretty enough to be this dumb.",
+    "If I wanted to kill myself, I'd climb your ego and jump to your IQ.",
+    "You're the reason god created the middle finger.",
+    "I'd agree with you, but then we'd both be idiots.",
+    "You're as bright as a black hole and twice as dense.",
+    "I could eat a bowl of alphabet soup and poop out a smarter statement.",
+    "You're the type of person who would get hit by a parked car.",
+    "You're so dense, light bends around you.",
+    "I envy people who have never met you.",
+    "You're about as useful as a chocolate teapot.",
+    "If you were on fire and I had water, I'd drink it.",
+    "You're the reason why aliens won't visit us.",
+    "I'd tell you to act your age, but I don't want you to die.",
+    "You're not just a clown, you're the entire circus.",
+    "Your family tree must be a cactus because everyone on it is a prick.",
+    "I'd insult you, but nature already did.",
+    "You're the reason they put instructions on shampoo.",
+    "If brains were dynamite, you wouldn't have enough to blow your nose.",
+    "You're about as sharp as a marble.",
+    "I'd call you a tool, but that would imply you're useful.",
+    "You're the kind of person who would microwave their phone to charge it.",
+    "Your birth certificate is an apology letter from the condom factory.",
+    "You're so ugly, when you were born the doctor slapped your mother.",
+    "I'd roast you, but my mom said I'm not allowed to burn trash.",
+    "You're like a broken pencil – pointless.",
+    "If you had another brain, it would be lonely.",
+    "You're proof that God has a sense of humor.",
+    "I'm not saying I hate you, but I'd unplug your life support to charge my phone.",
+    "You're the human version of a headache.",
+    "I'd high five you, but your face is in the way.",
+    "You're as useless as the 'ueue' in 'queue'.",
+    "Your face makes onions cry.",
+    "You're the reason I believe in birth control.",
+    "If stupid was a crime, you'd get the death penalty.",
+    "You're about as useful as Anne Frank's drum kit.",
+    "I'd call you a nerd, but that would be an insult to nerds.",
+    "You're the AT&T of people.",
+    "If ignorance is bliss, you must be the happiest person alive.",
+    "You're like a candle in the wind – useless and easily blown.",
+    "Your mind is like concrete – permanently set and all mixed up.",
+    "You're the reason I have trust issues.",
+    "I'd say you're as dumb as a rock, but at least a rock can hold a door open.",
+    "You're like a slinky – not really good for anything but still bring a smile when pushed down the stairs.",
+    "If I had a face like yours, I'd sue my parents.",
+    "You're the reason warning labels exist.",
+    "You're about as useful as a one-legged man in a butt-kicking contest.",
+    "I'd call you a donkey, but donkeys are useful.",
+    "You're the type to get lost in a round room looking for the corner.",
+    "If laughter is the best medicine, you're the whole pharmacy.",
+    "You're the reason people believe in reincarnation – nobody could be this dumb in one lifetime.",
+    "I'd explain it to you, but I don't have any puppets or crayons.",
+    "You're like a participation award – everyone gets one but nobody wants it.",
+    "If you were any slower, you'd be going backwards.",
+    "You're the human equivalent of a mosquito.",
+    "I'd tell you to go to hell, but I don't want to see you again.",
+    "You're about as useful as a chocolate fireguard.",
+    "Your IQ is lower than your shoe size.",
+    "You're the reason aliens haven't contacted us.",
+    "I'd roast you harder, but you're already well done.",
+    "You're like a gray sprinkle on a rainbow cupcake.",
+    "If I threw a stick, would you leave?",
+    "You're the reason I believe in natural selection.",
+    "You're about as sharp as a bowling ball.",
+    "I'd call you an idiot, but idiots would be offended.",
+    "You're the type to trip over a wireless connection.",
+    "If you were a spice, you'd be flour.",
+    "You're the reason directions are on shampoo bottles.",
+    "I'd high five your face with a chair.",
+    "You're about as useful as a screen protector on a brick.",
+    "Your IQ test came back negative.",
+    "You're the type to sell their car for gas money.",
+    "If you were a vegetable, you'd be a cabbage.",
+    "You're about as bright as a black hole.",
+    "I'd call you a Has-Been, but you never were.",
+    "You're the reason we can't have nice things.",
+    "If you were any more useless, you'd be a white crayon.",
+    "You're like a penny on the ground – not worth picking up.",
+    "I'd roast you, but you're already burnt.",
+    "You're the reason people invented the block button.",
+    "If you were a book, you'd be in the fiction section.",
+    "You're about as useful as a waterproof towel.",
+    "I'd call you ugly, but that would be an insult to ugly people.",
+    "You're the type to put a ruler under your pillow to see how long you slept.",
+    "If you were a color, you'd be beige.",
+    "You're the reason I lose faith in humanity.",
+    "I'd give you a piece of my mind, but you couldn't afford the whole thing.",
+    "You're about as useful as a solar-powered flashlight.",
+    "If you were a pizza topping, you'd be anchovies.",
+    "You're the type to get locked in a grocery store overnight and starve.",
+    "I'd roast you, but you already look like burnt toast.",
+    "You're about as sharp as a rubber ball.",
+    "If you were a spice, you'd be salt.",
+    "You're the reason autocorrect exists.",
+    "I'd call you basic, but that implies you have value.",
+    "You're like a white crayon – nobody knows why you exist.",
+    "If you were any more boring, you'd be a documentary about paint drying.",
+    "You're the type to look both ways before crossing a one-way street and still get hit.",
+    "I'd say you're one in a million, but there are 8 billion people, so you're more like one in 8 billion.",
+    "You're about as exciting as a wet sock.",
+    "If you were a day of the week, you'd be Monday.",
+    "You're the reason people use headphones in public.",
+    "I'd call you a waste of space, but space is infinite.",
+    "You're about as useful as a glass hammer.",
+    "If you were a font, you'd be Comic Sans.",
+    "You're the type to put their password as 'password123'.",
+    "I'd roast you harder, but I don't want to contribute to global warming.",
+    "You're about as sharp as a circle.",
+    "If you were a temperature, you'd be room temperature.",
+    "You're the reason people invented the mute button.",
+    "I'd call you a disaster, but disasters are interesting.",
+    "You're about as useful as a submarine with screen doors.",
+    "If you were a season, you'd be the transition between winter and spring when everything is muddy.",
+    "You're the type to check Facebook to see what you did last night.",
+    "I'd say you're going places, but probably nowhere good.",
+    "You're about as useful as a konami code in real life.",
+    "If you were a car, you'd be a Fiat Multipla.",
+    "You're the reason people say 'kids these days'.",
+    "I'd call you a train wreck, but train wrecks are worth watching.",
+    "You're about as useful as a one-ply toilet paper.",
+    "If you were a movie, you'd be straight to DVD.",
+    "You're the type to wave back at someone waving at the person behind you.",
+    "I'd insult your intelligence, but you wouldn't understand.",
+    "You're about as useful as a decaf coffee.",
+    "If you were a subject, you'd be PE – everyone hates you.",
+    "You're the reason people invented the 'Do Not Disturb' sign.",
+    "I'd call you mediocre, but that would be a compliment.",
+    "You're about as useful as a pogo stick in a minefield.",
+    "If you were weather, you'd be a light drizzle – annoying and nobody wants you.",
+    "You're the type to pull a door that says push.",
+    "I'd say you're a breath of fresh air, but air pollution exists because of people like you.",
+    "You're about as useful as a map in a round room.",
+    "If you were a superhero, your power would be disappointing people.",
+    "You're the reason people put up 'Employees Must Wash Hands' signs.",
+    "I'd call you a mistake, but mistakes can be learned from.",
+    "You're about as useful as a knitted condom.",
+    "If you were a meal, you'd be gas station sushi.",
+    "You're the type to forget your own birthday.",
+    "I'd say you peaked in high school, but that implies you peaked.",
+    "You're about as useful as a chocolate teacup.",
+    "If you were a video game, you'd be Superman 64.",
+    "You're the reason people invented noise-canceling headphones.",
+    "I'd roast you, but you're already toast.",
+    "You're about as useful as a sandpaper toilet seat.",
+    "If you were a flavor, you'd be unsalted.",
+    "You're the type to get excited about jury duty.",
+    "I'd call you a waste of oxygen, but plants need CO2.",
+    "You're about as useful as a inflatable dartboard.",
+    "If you were a holiday, you'd be Columbus Day – nobody celebrates you.",
+    "You're the reason people invented the snooze button.",
+    "I'd say you're a work in progress, but you're more of a work stoppage.",
+    "You're about as useful as a waterproof sponge.",
+    "If you were a social media platform, you'd be Google+.",
+    "You're the type to clap when the plane lands.",
+    "I'd call you a burden, but burdens are eventually put down.",
+    "You're about as useful as a reverse peephole.",
+    "If you were a game, you'd be tic-tac-toe – simple and boring.",
+    "You're the reason people invented the 'ignore' button.",
+    "I'd say you're unforgettable, but I've already forgotten what we're talking about.",
+    "You're about as useful as a solar-powered night light.",
+    "If you were a browser, you'd be Internet Explorer.",
+    "You're the type to use emojis unironically in 2026.",
+    "I'd roast you more, but I think you've suffered enough.",
+    "You're about as useful as a glass door on a submarine.",
+    "If you were a meme, you'd be a dead one from 2012.",
+    "You're the reason people invented private browsing.",
+    "I'd call you forgettable, but that would require remembering you first.",
+    "You're about as useful as a paper umbrella.",
+    "If you were a streaming service, you'd be Quibi.",
+    "You're the type to accidentally mute yourself on a Zoom call for 20 minutes.",
+    "I'd say you're one of a kind, thank god.",
+    "You're about as useful as a mesh umbrella.",
+    "If you were an app, you'd be pre-installed bloatware.",
+    "You're the reason people invented the block feature.",
+    "I'd call you ordinary, but that would be generous.",
+    "You're about as useful as a sundial at night.",
+    "If you were a console, you'd be the Ouya.",
+    "You're the type to put milk before cereal.",
+    "I'd say you're special, and I'd be right – special ed.",
+    "You're about as useful as a rotary phone in 2026.",
+    "If you were a condiment, you'd be expired ketchup.",
+    "You're the reason people invented the 'seen' feature.",
+    "I'd call you unique, but everyone's unique – you're just uniquely disappointing.",
+    "You're about as useful as an ashtray on a motorcycle.",
+    "If you were a cryptocurrency, you'd be SafeMoon.",
+    "You're the type to use speaker phone in public.",
+    "I'd say you're going places, yeah, probably nowhere.",
+    "You're about as useful as a chocolate teapot in a heatwave.",
+    "If you were a year, you'd be 2020.",
+    "You're the reason people invented incognito mode.",
+    "I'd roast you one more time, but I think you get the point.",
+    "You're about as useful as instructions for a hammer.",
+    "If you were a stock, I'd short you.",
+    "You're the type to reheat fish in the office microwave.",
+    "I'd say you're the worst, but that would require you being notable at something.",
+    "You're about as useful as a fork in soup.",
+    "If you were a meme format, you'd be Rage Comics.",
+    "You're the reason people ghost others.",
+    "I'd call you a legend, but legends are remembered.",
+    "You're about as useful as a DVD rewinder.",
+    "If you were a social situation, you'd be an awkward silence.",
+    "You're the type to still use 'your mom' jokes.",
+    "I'd say this is the end, but honestly, you probably didn't make it this far.",
+];
+
+// Trivia questions database (250 questions)
 const triviaQuestions = [
+    // General Knowledge (50)
     { question: "What year was Discord founded?", answer: "2015", category: "Discord" },
     { question: "What is the capital of Japan?", answer: "Tokyo", category: "Geography" },
     { question: "How many players are on a soccer team?", answer: "11", category: "Sports" },
@@ -60,6 +305,244 @@ const triviaQuestions = [
     { question: "How many strings does a guitar typically have?", answer: "6", category: "Music" },
     { question: "What is the hardest natural substance on Earth?", answer: "Diamond", category: "Science" },
     { question: "Who was the first person to walk on the moon?", answer: "Neil Armstrong", category: "History" },
+    { question: "What is the capital of France?", answer: "Paris", category: "Geography" },
+    { question: "How many sides does a hexagon have?", answer: "6", category: "Math" },
+    { question: "What is the largest mammal on Earth?", answer: "Blue Whale", category: "Animals" },
+    { question: "In what year did the Titanic sink?", answer: "1912", category: "History" },
+    { question: "What is the boiling point of water in Celsius?", answer: "100", category: "Science" },
+    { question: "Who invented the telephone?", answer: "Alexander Graham Bell", category: "History" },
+    { question: "What is the capital of Australia?", answer: "Canberra", category: "Geography" },
+    { question: "How many days are in a leap year?", answer: "366", category: "General" },
+    { question: "What is the chemical symbol for water?", answer: "H2O", category: "Science" },
+    { question: "Who wrote Harry Potter?", answer: "J.K. Rowling", category: "Literature" },
+    { question: "What is the smallest planet in our solar system?", answer: "Mercury", category: "Science" },
+    { question: "How many keys are on a standard piano?", answer: "88", category: "Music" },
+    { question: "What is the longest river in the world?", answer: "Nile", category: "Geography" },
+    { question: "In what year did humans first land on the moon?", answer: "1969", category: "History" },
+    { question: "What is the freezing point of water in Fahrenheit?", answer: "32", category: "Science" },
+    { question: "Who painted the Sistine Chapel?", answer: "Michelangelo", category: "Art" },
+    { question: "What is the capital of Canada?", answer: "Ottawa", category: "Geography" },
+    { question: "How many hours are in a week?", answer: "168", category: "Math" },
+    { question: "What gas do plants absorb from the atmosphere?", answer: "Carbon Dioxide", category: "Science" },
+    { question: "Who discovered penicillin?", answer: "Alexander Fleming", category: "Science" },
+    { question: "What is the largest desert in the world?", answer: "Sahara", category: "Geography" },
+    { question: "How many Olympic rings are there?", answer: "5", category: "Sports" },
+    { question: "What is the capital of Italy?", answer: "Rome", category: "Geography" },
+    { question: "In what year did World War I begin?", answer: "1914", category: "History" },
+    { question: "What is the fastest land animal?", answer: "Cheetah", category: "Animals" },
+    { question: "Who invented the light bulb?", answer: "Thomas Edison", category: "History" },
+    { question: "What is the largest country by area?", answer: "Russia", category: "Geography" },
+    { question: "How many teeth does an adult human have?", answer: "32", category: "Science" },
+    { question: "What is the chemical symbol for oxygen?", answer: "O", category: "Science" },
+    { question: "Who was the first President of the United States?", answer: "George Washington", category: "History" },
+    
+    // Pop Culture & Entertainment (50)
+    { question: "What year did Minecraft release?", answer: "2011", category: "Gaming" },
+    { question: "Who created SpongeBob SquarePants?", answer: "Stephen Hillenburg", category: "TV" },
+    { question: "What is Mario's brother's name?", answer: "Luigi", category: "Gaming" },
+    { question: "What movie won Best Picture in 2020?", answer: "Parasite", category: "Movies" },
+    { question: "How many Infinity Stones are there?", answer: "6", category: "Marvel" },
+    { question: "What is the highest-grossing film of all time?", answer: "Avatar", category: "Movies" },
+    { question: "Who voices Woody in Toy Story?", answer: "Tom Hanks", category: "Movies" },
+    { question: "What year did Fortnite release?", answer: "2017", category: "Gaming" },
+    { question: "What is the name of Iron Man?", answer: "Tony Stark", category: "Marvel" },
+    { question: "How many Harry Potter books are there?", answer: "7", category: "Literature" },
+    { question: "What is the longest-running animated TV show?", answer: "The Simpsons", category: "TV" },
+    { question: "Who directed Jurassic Park?", answer: "Steven Spielberg", category: "Movies" },
+    { question: "What game is Pikachu from?", answer: "Pokemon", category: "Gaming" },
+    { question: "How many Dragon Balls are there?", answer: "7", category: "Anime" },
+    { question: "What is Batman's real name?", answer: "Bruce Wayne", category: "DC" },
+    { question: "Who created The Simpsons?", answer: "Matt Groening", category: "TV" },
+    { question: "What year did YouTube launch?", answer: "2005", category: "Tech" },
+    { question: "How many Star Wars movies are there?", answer: "9", category: "Movies" },
+    { question: "What is the name of Thor's hammer?", answer: "Mjolnir", category: "Marvel" },
+    { question: "Who is the main character in The Legend of Zelda?", answer: "Link", category: "Gaming" },
+    { question: "What streaming service created Stranger Things?", answer: "Netflix", category: "TV" },
+    { question: "How many seasons of Breaking Bad are there?", answer: "5", category: "TV" },
+    { question: "What is Superman's weakness?", answer: "Kryptonite", category: "DC" },
+    { question: "Who directed The Dark Knight?", answer: "Christopher Nolan", category: "Movies" },
+    { question: "What year did Roblox release?", answer: "2006", category: "Gaming" },
+    { question: "How many Avengers movies are there?", answer: "4", category: "Marvel" },
+    { question: "What is the name of the dog in The Simpsons?", answer: "Santa's Little Helper", category: "TV" },
+    { question: "Who voices Elsa in Frozen?", answer: "Idina Menzel", category: "Movies" },
+    { question: "What game features Steve as the main character?", answer: "Minecraft", category: "Gaming" },
+    { question: "How many seasons of Game of Thrones are there?", answer: "8", category: "TV" },
+    { question: "What is the name of Harry Potter's owl?", answer: "Hedwig", category: "Literature" },
+    { question: "Who created Marvel Comics?", answer: "Stan Lee", category: "Marvel" },
+    { question: "What year did Among Us release?", answer: "2018", category: "Gaming" },
+    { question: "How many Lord of the Rings movies are there?", answer: "3", category: "Movies" },
+    { question: "What is the Flash's real name?", answer: "Barry Allen", category: "DC" },
+    { question: "Who directed Avatar?", answer: "James Cameron", category: "Movies" },
+    { question: "What game series features Master Chief?", answer: "Halo", category: "Gaming" },
+    { question: "How many episodes of Friends are there?", answer: "236", category: "TV" },
+    { question: "What is Spider-Man's real name?", answer: "Peter Parker", category: "Marvel" },
+    { question: "Who wrote The Hunger Games?", answer: "Suzanne Collins", category: "Literature" },
+    { question: "What year did TikTok launch?", answer: "2016", category: "Tech" },
+    { question: "How many seasons of The Office US are there?", answer: "9", category: "TV" },
+    { question: "What is Wonder Woman's real name?", answer: "Diana Prince", category: "DC" },
+    { question: "Who directed Inception?", answer: "Christopher Nolan", category: "Movies" },
+    { question: "What game features the Victory Royale?", answer: "Fortnite", category: "Gaming" },
+    { question: "How many seasons of Stranger Things are there?", answer: "4", category: "TV" },
+    { question: "What is the name of the main character in Naruto?", answer: "Naruto Uzumaki", category: "Anime" },
+    { question: "Who created Rick and Morty?", answer: "Justin Roiland", category: "TV" },
+    { question: "What year did Instagram launch?", answer: "2010", category: "Tech" },
+    { question: "How many Batman movies did Christopher Nolan direct?", answer: "3", category: "Movies" },
+    
+    // Science & Nature (50)
+    { question: "What is the powerhouse of the cell?", answer: "Mitochondria", category: "Biology" },
+    { question: "How many planets are in our solar system?", answer: "8", category: "Space" },
+    { question: "What is the largest organ in the human body?", answer: "Skin", category: "Biology" },
+    { question: "What gas do humans breathe out?", answer: "Carbon Dioxide", category: "Science" },
+    { question: "How many elements are on the periodic table?", answer: "118", category: "Chemistry" },
+    { question: "What is the closest star to Earth?", answer: "Sun", category: "Space" },
+    { question: "How many chambers does the human heart have?", answer: "4", category: "Biology" },
+    { question: "What is the chemical formula for salt?", answer: "NaCl", category: "Chemistry" },
+    { question: "What planet is closest to the Sun?", answer: "Mercury", category: "Space" },
+    { question: "How many legs does a spider have?", answer: "8", category: "Animals" },
+    { question: "What is the study of earthquakes called?", answer: "Seismology", category: "Science" },
+    { question: "How long does it take for light from the Sun to reach Earth?", answer: "8", category: "Space" },
+    { question: "What is the smallest bone in the human body?", answer: "Stapes", category: "Biology" },
+    { question: "What is the chemical symbol for sodium?", answer: "Na", category: "Chemistry" },
+    { question: "How many moons does Mars have?", answer: "2", category: "Space" },
+    { question: "What is the largest bird in the world?", answer: "Ostrich", category: "Animals" },
+    { question: "What is the study of plants called?", answer: "Botany", category: "Science" },
+    { question: "How many hearts does an octopus have?", answer: "3", category: "Animals" },
+    { question: "What is the most abundant gas in Earth's atmosphere?", answer: "Nitrogen", category: "Science" },
+    { question: "What planet has the most moons?", answer: "Saturn", category: "Space" },
+    { question: "How many lungs do humans have?", answer: "2", category: "Biology" },
+    { question: "What is the chemical symbol for carbon?", answer: "C", category: "Chemistry" },
+    { question: "What is the largest star in our solar system?", answer: "Sun", category: "Space" },
+    { question: "How many wings does a bee have?", answer: "4", category: "Animals" },
+    { question: "What is the study of weather called?", answer: "Meteorology", category: "Science" },
+    { question: "How many teeth do sharks regrow throughout life?", answer: "Unlimited", category: "Animals" },
+    { question: "What is the pH of pure water?", answer: "7", category: "Chemistry" },
+    { question: "What planet is known for its rings?", answer: "Saturn", category: "Space" },
+    { question: "How many pairs of ribs do humans have?", answer: "12", category: "Biology" },
+    { question: "What is the chemical formula for carbon dioxide?", answer: "CO2", category: "Chemistry" },
+    { question: "How many Earths could fit inside the Sun?", answer: "1000000", category: "Space" },
+    { question: "What is the fastest fish in the ocean?", answer: "Sailfish", category: "Animals" },
+    { question: "What is the study of fungi called?", answer: "Mycology", category: "Science" },
+    { question: "How many arms does a starfish have?", answer: "5", category: "Animals" },
+    { question: "What is the most common element in the universe?", answer: "Hydrogen", category: "Science" },
+    { question: "What is the hottest planet in our solar system?", answer: "Venus", category: "Space" },
+    { question: "How many chromosomes do humans have?", answer: "46", category: "Biology" },
+    { question: "What is the chemical symbol for iron?", answer: "Fe", category: "Chemistry" },
+    { question: "How many light years away is the nearest star?", answer: "4", category: "Space" },
+    { question: "What is the largest species of bear?", answer: "Polar Bear", category: "Animals" },
+    { question: "What is the study of rocks called?", answer: "Geology", category: "Science" },
+    { question: "How many legs does a lobster have?", answer: "10", category: "Animals" },
+    { question: "What is the atomic number of hydrogen?", answer: "1", category: "Chemistry" },
+    { question: "What galaxy is Earth in?", answer: "Milky Way", category: "Space" },
+    { question: "How many vertebrae are in the human spine?", answer: "33", category: "Biology" },
+    { question: "What is the rarest blood type?", answer: "AB Negative", category: "Biology" },
+    { question: "How many legs does a centipede have?", answer: "100", category: "Animals" },
+    { question: "What is the study of insects called?", answer: "Entomology", category: "Science" },
+    { question: "What is the largest land animal?", answer: "African Elephant", category: "Animals" },
+    { question: "How many moons does Jupiter have?", answer: "79", category: "Space" },
+    
+    // Technology & Internet (50)
+    { question: "Who founded Microsoft?", answer: "Bill Gates", category: "Tech" },
+    { question: "What does CPU stand for?", answer: "Central Processing Unit", category: "Tech" },
+    { question: "Who founded Apple?", answer: "Steve Jobs", category: "Tech" },
+    { question: "What year was Google founded?", answer: "1998", category: "Tech" },
+    { question: "What does HTML stand for?", answer: "Hypertext Markup Language", category: "Tech" },
+    { question: "Who founded Facebook?", answer: "Mark Zuckerberg", category: "Tech" },
+    { question: "What does RAM stand for?", answer: "Random Access Memory", category: "Tech" },
+    { question: "Who founded Amazon?", answer: "Jeff Bezos", category: "Tech" },
+    { question: "What year was Twitter founded?", answer: "2006", category: "Tech" },
+    { question: "What does USB stand for?", answer: "Universal Serial Bus", category: "Tech" },
+    { question: "Who founded Tesla?", answer: "Elon Musk", category: "Tech" },
+    { question: "What does Wi-Fi stand for?", answer: "Wireless Fidelity", category: "Tech" },
+    { question: "Who created Linux?", answer: "Linus Torvalds", category: "Tech" },
+    { question: "What year was Wikipedia founded?", answer: "2001", category: "Tech" },
+    { question: "What does URL stand for?", answer: "Uniform Resource Locator", category: "Tech" },
+    { question: "Who founded PayPal?", answer: "Elon Musk", category: "Tech" },
+    { question: "What does GPU stand for?", answer: "Graphics Processing Unit", category: "Tech" },
+    { question: "Who invented the World Wide Web?", answer: "Tim Berners-Lee", category: "Tech" },
+    { question: "What year was Netflix founded?", answer: "1997", category: "Tech" },
+    { question: "What does DNS stand for?", answer: "Domain Name System", category: "Tech" },
+    { question: "Who founded Spotify?", answer: "Daniel Ek", category: "Tech" },
+    { question: "What does SSD stand for?", answer: "Solid State Drive", category: "Tech" },
+    { question: "Who created Python programming language?", answer: "Guido van Rossum", category: "Tech" },
+    { question: "What year was Snapchat founded?", answer: "2011", category: "Tech" },
+    { question: "What does VPN stand for?", answer: "Virtual Private Network", category: "Tech" },
+    { question: "Who founded Reddit?", answer: "Steve Huffman", category: "Tech" },
+    { question: "What does API stand for?", answer: "Application Programming Interface", category: "Tech" },
+    { question: "Who created Java programming language?", answer: "James Gosling", category: "Tech" },
+    { question: "What year was WhatsApp founded?", answer: "2009", category: "Tech" },
+    { question: "What does ISP stand for?", answer: "Internet Service Provider", category: "Tech" },
+    { question: "Who founded Uber?", answer: "Travis Kalanick", category: "Tech" },
+    { question: "What does OS stand for?", answer: "Operating System", category: "Tech" },
+    { question: "Who created the C programming language?", answer: "Dennis Ritchie", category: "Tech" },
+    { question: "What year was Twitch founded?", answer: "2011", category: "Tech" },
+    { question: "What does LAN stand for?", answer: "Local Area Network", category: "Tech" },
+    { question: "Who founded Airbnb?", answer: "Brian Chesky", category: "Tech" },
+    { question: "What does HTTP stand for?", answer: "Hypertext Transfer Protocol", category: "Tech" },
+    { question: "Who created JavaScript?", answer: "Brendan Eich", category: "Tech" },
+    { question: "What year was Slack founded?", answer: "2013", category: "Tech" },
+    { question: "What does FPS stand for in gaming?", answer: "Frames Per Second", category: "Gaming" },
+    { question: "Who founded Nvidia?", answer: "Jensen Huang", category: "Tech" },
+    { question: "What does BIOS stand for?", answer: "Basic Input Output System", category: "Tech" },
+    { question: "Who created Rust programming language?", answer: "Graydon Hoare", category: "Tech" },
+    { question: "What year was Discord founded?", answer: "2015", category: "Tech" },
+    { question: "What does SQL stand for?", answer: "Structured Query Language", category: "Tech" },
+    { question: "Who founded Adobe?", answer: "John Warnock", category: "Tech" },
+    { question: "What does AI stand for?", answer: "Artificial Intelligence", category: "Tech" },
+    { question: "Who created Ruby programming language?", answer: "Yukihiro Matsumoto", category: "Tech" },
+    { question: "What year was Zoom founded?", answer: "2011", category: "Tech" },
+    { question: "What does IoT stand for?", answer: "Internet of Things", category: "Tech" },
+    
+    // Sports & Games (50)
+    { question: "How many points is a touchdown worth?", answer: "6", category: "Sports" },
+    { question: "How many players on a basketball team?", answer: "5", category: "Sports" },
+    { question: "What sport is played at Wimbledon?", answer: "Tennis", category: "Sports" },
+    { question: "How many holes are on a golf course?", answer: "18", category: "Sports" },
+    { question: "How many innings in a baseball game?", answer: "9", category: "Sports" },
+    { question: "What country hosted the 2016 Olympics?", answer: "Brazil", category: "Sports" },
+    { question: "How many players on a hockey team?", answer: "6", category: "Sports" },
+    { question: "Who has won the most Super Bowls?", answer: "Tom Brady", category: "Sports" },
+    { question: "How many points is a 3-pointer in basketball?", answer: "3", category: "Sports" },
+    { question: "What sport uses a shuttlecock?", answer: "Badminton", category: "Sports" },
+    { question: "How many Grand Slams are in tennis?", answer: "4", category: "Sports" },
+    { question: "What country won the 2018 World Cup?", answer: "France", category: "Sports" },
+    { question: "How many periods in a hockey game?", answer: "3", category: "Sports" },
+    { question: "Who holds the home run record?", answer: "Barry Bonds", category: "Sports" },
+    { question: "How many points is a field goal in football?", answer: "3", category: "Sports" },
+    { question: "What sport is played in the NBA?", answer: "Basketball", category: "Sports" },
+    { question: "How many bases in baseball?", answer: "4", category: "Sports" },
+    { question: "What country hosted the 2020 Olympics?", answer: "Japan", category: "Sports" },
+    { question: "How many quarters in a football game?", answer: "4", category: "Sports" },
+    { question: "Who has won the most NBA championships?", answer: "Bill Russell", category: "Sports" },
+    { question: "How many strikes for a strikeout?", answer: "3", category: "Sports" },
+    { question: "What sport is played in the NHL?", answer: "Hockey", category: "Sports" },
+    { question: "How many yards is a football field?", answer: "100", category: "Sports" },
+    { question: "What country hosted the 2014 World Cup?", answer: "Brazil", category: "Sports" },
+    { question: "How many players on a volleyball team?", answer: "6", category: "Sports" },
+    { question: "Who is the fastest man in the world?", answer: "Usain Bolt", category: "Sports" },
+    { question: "How many sets in a tennis match?", answer: "3", category: "Sports" },
+    { question: "What sport is played in the NFL?", answer: "Football", category: "Sports" },
+    { question: "How many outs in an inning?", answer: "3", category: "Sports" },
+    { question: "What country has won the most World Cups?", answer: "Brazil", category: "Sports" },
+    { question: "How many points for a safety in football?", answer: "2", category: "Sports" },
+    { question: "What sport is played in the MLB?", answer: "Baseball", category: "Sports" },
+    { question: "How many fouls before fouling out in NBA?", answer: "6", category: "Sports" },
+    { question: "What sport uses a puck?", answer: "Hockey", category: "Sports" },
+    { question: "How many yards for a first down?", answer: "10", category: "Sports" },
+    { question: "Who has the most Olympic gold medals?", answer: "Michael Phelps", category: "Sports" },
+    { question: "How many players on a rugby team?", answer: "15", category: "Sports" },
+    { question: "What sport is played at Augusta National?", answer: "Golf", category: "Sports" },
+    { question: "How many pins in bowling?", answer: "10", category: "Sports" },
+    { question: "What country hosted the first Olympics?", answer: "Greece", category: "Sports" },
+    { question: "How many timeouts per half in NBA?", answer: "7", category: "Sports" },
+    { question: "What sport uses a net and racket?", answer: "Tennis", category: "Sports" },
+    { question: "How many players in a cricket team?", answer: "11", category: "Sports" },
+    { question: "Who has the most Tour de France wins?", answer: "Lance Armstrong", category: "Sports" },
+    { question: "How many rounds in a boxing match?", answer: "12", category: "Sports" },
+    { question: "What sport is played at the Masters?", answer: "Golf", category: "Sports" },
+    { question: "How many games in a set of tennis?", answer: "6", category: "Sports" },
+    { question: "Who has the most career points in NBA?", answer: "LeBron James", category: "Sports" },
+    { question: "How many arrows in archery round?", answer: "72", category: "Sports" },
+    { question: "What sport uses a pommel horse?", answer: "Gymnastics", category: "Sports" },
 ];
 
 // Store user states for interactive commands and tickets
@@ -99,6 +582,10 @@ client.on('ready', () => {
     // Start stream checking (every minute)
     setInterval(checkYouTubeStreams, 60000);
     checkYouTubeStreams(); // Check immediately on startup
+    
+    // Start birthday checking (every minute)
+    setInterval(checkBirthdays, 60000);
+    checkBirthdays(); // Check immediately on startup
     
     startKeepAliveServer();
 });
@@ -290,6 +777,20 @@ client.on('messageCreate', async (message) => {
         }
     }
     
+    // Track message for vibe check (only in main chat)
+    if (message.channel.id === CONFIG.MAIN_CHAT_CHANNEL_ID) {
+        recentMessages.push({
+            timestamp: Date.now(),
+            userId: message.author.id,
+            content: message.content
+        });
+        
+        // Keep only last 1000 messages
+        if (recentMessages.length > MAX_MESSAGE_HISTORY) {
+            recentMessages.shift();
+        }
+    }
+    
     // Trivia answer checking
     if (currentTrivia && message.channel.id === CONFIG.MAIN_CHAT_CHANNEL_ID) {
         const userAnswer = message.content.trim().toLowerCase();
@@ -326,8 +827,23 @@ client.on('messageCreate', async (message) => {
         }
     }
     
-    // Staff commands (work in server channels)
+    // Commands (work in server channels)
     if (message.content.startsWith('!')) {
+        const args = message.content.slice(1).trim().split(/ +/);
+        const command = args[0].toLowerCase();
+        
+        // Public commands (everyone can use)
+        if (command === 'birthday') {
+            await handleBirthdayCommand(message);
+            return;
+        }
+        
+        if (command === 'vibecheck') {
+            await performVibeCheck(message);
+            return;
+        }
+        
+        // Staff-only commands
         await handleStaffCommands(message);
     }
 });
@@ -880,6 +1396,199 @@ async function handleStaffCommands(message) {
     }
 }
 
+// Birthday command handler - AVAILABLE TO EVERYONE
+async function handleBirthdayCommand(message) {
+    const args = message.content.slice(1).trim().split(/ +/);
+    const input = args[1];
+    
+    if (!input) {
+        // Show user's current birthday
+        const userBirthday = birthdays.get(message.author.id);
+        if (userBirthday) {
+            await message.reply(`🎂 Your birthday is set to: **${userBirthday.month}/${userBirthday.day}**\n\nTo remove it, use: \`!birthday remove\``);
+        } else {
+            await message.reply(`🎂 You haven't set your birthday yet!\n\nUse: \`!birthday MM/DD\`\nExample: \`!birthday 12/25\``);
+        }
+        return;
+    }
+    
+    if (input.toLowerCase() === 'remove') {
+        birthdays.delete(message.author.id);
+        await message.reply('🎂 Your birthday has been removed from the system.');
+        addAuditLog('Birthday Removed', message.author, 'Birthday registration removed', 'info');
+        return;
+    }
+    
+    // Parse MM/DD format
+    const parts = input.split('/');
+    if (parts.length !== 2) {
+        await message.reply('❌ Invalid format! Use: `!birthday MM/DD` (e.g., `!birthday 12/25`)');
+        return;
+    }
+    
+    const month = parseInt(parts[0]);
+    const day = parseInt(parts[1]);
+    
+    // Validate
+    if (month < 1 || month > 12 || day < 1 || day > 31) {
+        await message.reply('❌ Invalid date! Month must be 1-12 and day must be 1-31.');
+        return;
+    }
+    
+    // Validate day for month
+    const daysInMonth = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    if (day > daysInMonth[month - 1]) {
+        await message.reply(`❌ Invalid day for month ${month}! Max day is ${daysInMonth[month - 1]}.`);
+        return;
+    }
+    
+    // Save birthday
+    birthdays.set(message.author.id, {
+        month,
+        day,
+        username: message.author.tag
+    });
+    
+    await message.reply(`🎂 Birthday saved! I'll announce it on **${month}/${day}** at 8am and 8pm!`);
+    addAuditLog('Birthday Set', message.author, `Birthday: ${month}/${day}`, 'success');
+}
+
+// Vibe check function - AVAILABLE TO EVERYONE
+async function performVibeCheck(message) {
+    const now = Date.now();
+    const oneHourAgo = now - (60 * 60 * 1000);
+    const twelveHoursAgo = now - (12 * 60 * 60 * 1000);
+    const twentyFourHoursAgo = now - (24 * 60 * 60 * 1000);
+    
+    const last1h = recentMessages.filter(m => m.timestamp > oneHourAgo);
+    const last12h = recentMessages.filter(m => m.timestamp > twelveHoursAgo);
+    const last24h = recentMessages.filter(m => m.timestamp > twentyFourHoursAgo);
+    
+    // Sentiment analysis (basic)
+    function analyzeSentiment(messages) {
+        if (messages.length === 0) return { positive: 0, negative: 0, neutral: 0, energy: 0 };
+        
+        const positive = ['lol', 'lmao', 'haha', 'gg', 'good', 'great', 'awesome', 'love', 'thanks', 'nice', 'poggers', 'pog', '😂', '🤣', '😄', '❤️', '💯', '🔥', '!', 'yes', 'yeah', 'yay'];
+        const negative = ['bad', 'hate', 'stupid', 'dumb', 'wtf', 'bruh', 'cringe', 'rip', 'oof', 'sad', '😢', '😭', '💀', 'no', 'nah', 'nope', 'ugh'];
+        
+        let positiveCount = 0;
+        let negativeCount = 0;
+        let energyScore = 0;
+        
+        messages.forEach(msg => {
+            const lower = msg.content.toLowerCase();
+            
+            // Check positive words
+            positive.forEach(word => {
+                if (lower.includes(word)) positiveCount++;
+            });
+            
+            // Check negative words
+            negative.forEach(word => {
+                if (lower.includes(word)) negativeCount++;
+            });
+            
+            // Energy from caps and punctuation
+            const caps = (msg.content.match(/[A-Z]/g) || []).length;
+            const exclamation = (msg.content.match(/!/g) || []).length;
+            energyScore += caps + (exclamation * 2);
+        });
+        
+        const total = positiveCount + negativeCount;
+        return {
+            positive: total > 0 ? Math.round((positiveCount / total) * 100) : 50,
+            negative: total > 0 ? Math.round((negativeCount / total) * 100) : 50,
+            neutral: total > 0 ? Math.round((1 - (positiveCount + negativeCount) / messages.length) * 100) : 0,
+            energy: Math.min(100, Math.round((energyScore / messages.length) * 10))
+        };
+    }
+    
+    const vibe1h = analyzeSentiment(last1h);
+    const vibe12h = analyzeSentiment(last12h);
+    const vibe24h = analyzeSentiment(last24h);
+    
+    function getVibeEmoji(positive, negative, energy) {
+        if (positive > 60 && energy > 50) return '🔥 HYPED';
+        if (positive > 60) return '😊 POSITIVE';
+        if (negative > 60) return '😤 SALTY';
+        if (energy > 70) return '⚡ ENERGETIC';
+        if (energy < 30) return '😴 CHILL';
+        return '😐 NEUTRAL';
+    }
+    
+    const embed = new Discord.EmbedBuilder()
+        .setColor('#5865F2')
+        .setTitle('✨ Vibe Check')
+        .setDescription('Current chat atmosphere analysis')
+        .addFields(
+            {
+                name: '🕐 Last Hour',
+                value: `${getVibeEmoji(vibe1h.positive, vibe1h.negative, vibe1h.energy)}\nPositive: ${vibe1h.positive}%\nNegative: ${vibe1h.negative}%\nEnergy: ${vibe1h.energy}%\nMessages: ${last1h.length}`,
+                inline: true
+            },
+            {
+                name: '🕛 Last 12 Hours',
+                value: `${getVibeEmoji(vibe12h.positive, vibe12h.negative, vibe12h.energy)}\nPositive: ${vibe12h.positive}%\nNegative: ${vibe12h.negative}%\nEnergy: ${vibe12h.energy}%\nMessages: ${last12h.length}`,
+                inline: true
+            },
+            {
+                name: '📅 Last 24 Hours',
+                value: `${getVibeEmoji(vibe24h.positive, vibe24h.negative, vibe24h.energy)}\nPositive: ${vibe24h.positive}%\nNegative: ${vibe24h.negative}%\nEnergy: ${vibe24h.energy}%\nMessages: ${last24h.length}`,
+                inline: true
+            }
+        )
+        .setFooter({ text: 'Vibe analysis based on message content and energy' })
+        .setTimestamp();
+    
+    await message.reply({ embeds: [embed] });
+}
+
+// Birthday checking system
+async function checkBirthdays() {
+    if (!CONFIG.ANNOUNCEMENT_CHANNEL_ID) return;
+    
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    const currentMonth = now.getMonth() + 1; // 0-indexed
+    const currentDay = now.getDate();
+    
+    // Only run at 8am (8:00) or 8pm (20:00)
+    if ((currentHour === 8 || currentHour === 20) && currentMinute === 0) {
+        // Find all birthdays today
+        const birthdayPeople = [];
+        
+        for (const [userId, birthday] of birthdays.entries()) {
+            if (birthday.month === currentMonth && birthday.day === currentDay) {
+                birthdayPeople.push({ userId, username: birthday.username });
+            }
+        }
+        
+        if (birthdayPeople.length > 0) {
+            try {
+                const announcementChannel = await client.channels.fetch(CONFIG.ANNOUNCEMENT_CHANNEL_ID);
+                
+                // Create mentions list
+                const mentions = birthdayPeople.map(p => `<@${p.userId}>`).join(', ');
+                const names = birthdayPeople.map(p => p.username).join(', ');
+                
+                const embed = new Discord.EmbedBuilder()
+                    .setColor('#FFD700')
+                    .setTitle('🎂 Happy Birthday! 🎉')
+                    .setDescription(`Today's the special day for:\n\n${mentions}\n\nWishing you an amazing birthday! 🎈🎊`)
+                    .setFooter({ text: `Birthday${birthdayPeople.length > 1 ? 's' : ''} on ${currentMonth}/${currentDay}` })
+                    .setTimestamp();
+                
+                await announcementChannel.send({ content: mentions, embeds: [embed] });
+                addAuditLog('Birthday Announced', { tag: 'System', id: 'system' }, `Birthday for: ${names}`, 'success');
+                
+            } catch (error) {
+                console.error('Error announcing birthdays:', error);
+            }
+        }
+    }
+}
+
 // Trivia System Functions
 function startTriviaSystem() {
     // Clear any existing interval
@@ -1234,17 +1943,32 @@ function startKeepAliveServer() {
                     
                     const announcementChannel = await client.channels.fetch(CONFIG.ANNOUNCEMENT_CHANNEL_ID);
                     
-                    const embed = new Discord.EmbedBuilder()
-                        .setColor('#5865F2')
-                        .setTitle('📢 Announcement')
-                        .setDescription(data.message)
-                        .setTimestamp()
-                        .setFooter({ text: 'Posted from Web Dashboard' });
+                    // Check if message contains a URL
+                    const urlRegex = /(https?:\/\/[^\s]+)/g;
+                    const urls = data.message.match(urlRegex);
                     
-                    const msg = await announcementChannel.send({ 
-                        content: data.pingEveryone ? '@everyone' : null,
-                        embeds: [embed] 
-                    });
+                    let msg;
+                    
+                    if (urls && urls.length > 0) {
+                        // Message has URL - send with auto-embed
+                        // Discord auto-embeds links, just send the message with @everyone if needed
+                        msg = await announcementChannel.send({
+                            content: (data.pingEveryone ? '@everyone\n\n' : '') + data.message
+                        });
+                    } else {
+                        // No URL - use fancy embed format
+                        const embed = new Discord.EmbedBuilder()
+                            .setColor('#5865F2')
+                            .setTitle('📢 Announcement')
+                            .setDescription(data.message)
+                            .setTimestamp()
+                            .setFooter({ text: 'Posted from Web Dashboard' });
+                        
+                        msg = await announcementChannel.send({ 
+                            content: data.pingEveryone ? '@everyone' : null,
+                            embeds: [embed] 
+                        });
+                    }
                     
                     // Try to publish if it's an announcement channel
                     if (msg.crosspostable) {
@@ -1536,6 +2260,35 @@ function startKeepAliveServer() {
                             }
                             break;
                             
+                        case 'roast':
+                            if (!data.userId) {
+                                throw new Error('User ID required');
+                            }
+                            if (!CONFIG.MAIN_CHAT_CHANNEL_ID) {
+                                throw new Error('MAIN_CHAT_CHANNEL_ID not configured');
+                            }
+                            try {
+                                const targetUser = await client.users.fetch(data.userId);
+                                const mainChannel = await client.channels.fetch(CONFIG.MAIN_CHAT_CHANNEL_ID);
+                                
+                                // Pick random roast
+                                const randomRoast = roasts[Math.floor(Math.random() * roasts.length)];
+                                
+                                const embed = new Discord.EmbedBuilder()
+                                    .setColor('#FF4444')
+                                    .setTitle('🔥 You Just Got Roasted!')
+                                    .setDescription(`${targetUser}\n\n*${randomRoast}*`)
+                                    .setFooter({ text: 'Roasted from Web Dashboard' })
+                                    .setTimestamp();
+                                
+                                await mainChannel.send({ embeds: [embed] });
+                                result = `Roasted ${targetUser.tag}!`;
+                                addAuditLog('User Roasted', { tag: 'Web Dashboard', id: 'web' }, `Roasted ${targetUser.tag}`, 'info');
+                            } catch (err) {
+                                throw new Error('User not found');
+                            }
+                            break;
+                            
                         default:
                             throw new Error('Invalid action');
                     }
@@ -1819,6 +2572,7 @@ function generateDashboardHTML() {
             </div>
         </div>
 
+        <!-- Fun Features Tab -->
         <div id="tab-fun" class="tab-content">
             <div class="card">
                 <h2>🧠 Trivia System</h2>
@@ -1865,6 +2619,19 @@ function generateDashboardHTML() {
                     <div style="color: var(--text-secondary);">Currently mimicking:</div>
                     <div id="mimicTarget" style="color: var(--accent); font-weight: 600; margin-top: 4px;"></div>
                 </div>
+            </div>
+            
+            <div class="card">
+                <h2>🔥 Roast Generator</h2>
+                <div id="roastAlert" class="alert"></div>
+                <p style="color: var(--text-secondary); margin-bottom: 16px;">
+                    Roast someone publicly in main chat! 250 random roasts available.
+                </p>
+                <div class="form-group">
+                    <label>Target User ID</label>
+                    <input type="text" id="roastUserId" placeholder="Enter user ID to roast...">
+                </div>
+                <button class="btn btn-danger" onclick="roastUser()">🔥 Roast Them!</button>
             </div>
         </div>
 
@@ -2227,7 +2994,7 @@ function generateDashboardHTML() {
                 const res = await fetch('/api/quick-action', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ password, action: \`trivia-\${action}\` })
+                    body: JSON.stringify({ password, action: `trivia-${action}` })
                 });
                 const data = await res.json();
                 if (data.success) {
@@ -2273,20 +3040,20 @@ function generateDashboardHTML() {
                         container.innerHTML = '<p style="color: var(--text-muted); text-align: center;">No scores yet!</p>';
                         return;
                     }
-                    container.innerHTML = \`
+                    container.innerHTML = `
                         <div style="background: var(--bg-tertiary); border-radius: 8px; padding: 16px;">
                             <h3 style="margin-bottom: 12px; color: var(--accent);">🏆 Leaderboard</h3>
-                            \${data.scores.map((entry, index) => {
+                            ${data.scores.map((entry, index) => {
                                 const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : (index + 1) + '.';
-                                return \`
+                                return `
                                     <div style="display: flex; justify-content: space-between; padding: 8px; background: var(--bg-primary); border-radius: 6px; margin-bottom: 8px;">
-                                        <span>\${medal} \${entry.tag}</span>
-                                        <span style="color: var(--accent); font-weight: 600;">\${entry.score} pts</span>
+                                        <span>${medal} ${entry.tag}</span>
+                                        <span style="color: var(--accent); font-weight: 600;">${entry.score} pts</span>
                                     </div>
-                                \`;
+                                `;
                             }).join('')}
                         </div>
-                    \`;
+                    `;
                 } else {
                     showAlert('triviaAlert', data.error || data.message, 'error');
                 }
@@ -2298,7 +3065,7 @@ function generateDashboardHTML() {
         // Mimic Functions
         async function toggleMimic(action) {
             try {
-                let body = { password, action: \`mimic-\${action}\` };
+                let body = { password, action: `mimic-${action}` };
                 
                 if (action === 'on') {
                     const userId = document.getElementById('mimicUserId').value;
@@ -2330,6 +3097,32 @@ function generateDashboardHTML() {
             }
         }
         
+        // Roast Function
+        async function roastUser() {
+            try {
+                const userId = document.getElementById('roastUserId').value;
+                if (!userId) {
+                    showAlert('roastAlert', 'Please enter a user ID', 'error');
+                    return;
+                }
+                
+                const res = await fetch('/api/quick-action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password, action: 'roast', userId })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showAlert('roastAlert', data.message + ' 🔥', 'success');
+                    document.getElementById('roastUserId').value = '';
+                } else {
+                    showAlert('roastAlert', data.error, 'error');
+                }
+            } catch (err) {
+                showAlert('roastAlert', 'Error: ' + err.message, 'error');
+            }
+        }
+        
         function formatPermissionName(key) {
             return key.replace(/([A-Z])/g, ' $1').trim().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
         }
@@ -2345,7 +3138,7 @@ function generateDashboardHTML() {
         });
     </script>
 </body>
-</html>`;
+</html>\`;
 }
 
 // Login

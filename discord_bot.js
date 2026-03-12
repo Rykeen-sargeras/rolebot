@@ -1790,7 +1790,6 @@ async function handlePermissionCommand(message) {
 }
 
 async function collectServerData(guild) {
-    // ... (same as before - keeping original functionality)
     const roles = guild.roles.cache
         .filter(role => role.id !== guild.id)
         .sort((a, b) => b.position - a.position);
@@ -1847,7 +1846,6 @@ async function collectServerData(guild) {
 }
 
 function generateHTML(data) {
-    // ... (same HTML generation as before)
     return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${data.serverName} Dashboard</title></head><body><h1>${data.serverName} Role Permissions</h1><p>Dashboard generated on ${new Date().toLocaleString()}</p></body></html>`;
 }
 
@@ -1951,7 +1949,6 @@ function startKeepAliveServer() {
                     
                     if (urls && urls.length > 0) {
                         // Message has URL - send with auto-embed
-                        // Discord auto-embeds links, just send the message with @everyone if needed
                         msg = await announcementChannel.send({
                             content: (data.pingEveryone ? '@everyone\n\n' : '') + data.message
                         });
@@ -2468,7 +2465,7 @@ function generateDashboardHTML() {
 <body>
     <div id="loginScreen" class="login-screen">
         <div class="login-box">
-            <h1>🤖 Bot Dashboard</h1>
+            <h1>&#x1F916; Bot Dashboard</h1>
             <p>Enter password to access dashboard</p>
             <div id="loginAlert" class="alert"></div>
             <div class="form-group">
@@ -2492,13 +2489,13 @@ function generateDashboardHTML() {
         </div>
 
         <div class="tabs">
-            <button class="tab active" onclick="showTab('messages')">📨 Messages</button>
-            <button class="tab" onclick="showTab('announcements')">📢 Announcements</button>
-            <button class="tab" onclick="showTab('users')">👥 Users</button>
-            <button class="tab" onclick="showTab('actions')">⚡ Quick Actions</button>
-            <button class="tab" onclick="showTab('fun')">🎮 Fun Features</button>
-            <button class="tab" onclick="showTab('audit')">📋 Audit Log</button>
-            <button class="tab" onclick="showTab('roles')">🔐 Roles</button>
+            <button class="tab active" onclick="showTab('messages')">&#x1F4E8; Messages</button>
+            <button class="tab" onclick="showTab('announcements')">&#x1F4E2; Announcements</button>
+            <button class="tab" onclick="showTab('users')">&#x1F465; Users</button>
+            <button class="tab" onclick="showTab('actions')">&#x26A1; Quick Actions</button>
+            <button class="tab" onclick="showTab('fun')">&#x1F3AE; Fun Features</button>
+            <button class="tab" onclick="showTab('audit')">&#x1F4CB; Audit Log</button>
+            <button class="tab" onclick="showTab('roles')">&#x1F510; Roles</button>
         </div>
 
         <div id="tab-messages" class="tab-content active">
@@ -2548,19 +2545,19 @@ function generateDashboardHTML() {
                 <div id="actionAlert" class="alert"></div>
                 <div class="quick-actions-grid">
                     <div class="quick-action-btn" onclick="quickAction('check-stream')">
-                        <div class="quick-action-icon">🔴</div>
+                        <div class="quick-action-icon">&#x1F534;</div>
                         <div class="quick-action-label">Check Stream</div>
                     </div>
                     <div class="quick-action-btn" onclick="quickAction('set-online')">
-                        <div class="quick-action-icon">🟢</div>
+                        <div class="quick-action-icon">&#x1F7E2;</div>
                         <div class="quick-action-label">Set Online</div>
                     </div>
                     <div class="quick-action-btn" onclick="quickAction('set-offline')">
-                        <div class="quick-action-icon">⚫</div>
+                        <div class="quick-action-icon">&#x26AB;</div>
                         <div class="quick-action-label">Set Offline</div>
                     </div>
                     <div class="quick-action-btn" onclick="quickAction('clear-audit')">
-                        <div class="quick-action-icon">🗑️</div>
+                        <div class="quick-action-icon">&#x1F5D1;</div>
                         <div class="quick-action-label">Clear Audit</div>
                     </div>
                 </div>
@@ -2574,26 +2571,26 @@ function generateDashboardHTML() {
 
         <div id="tab-fun" class="tab-content">
             <div class="card">
-                <h2>🧠 Trivia System</h2>
+                <h2>&#x1F9E0; Trivia System</h2>
                 <div id="triviaAlert" class="alert"></div>
                 <p style="color: var(--text-secondary); margin-bottom: 16px;">
                     Auto-posts trivia questions every 25 minutes. First correct answer wins 100 points!
                 </p>
                 <div class="quick-actions-grid">
                     <div class="quick-action-btn" onclick="toggleTrivia('on')">
-                        <div class="quick-action-icon">✅</div>
+                        <div class="quick-action-icon">&#x2705;</div>
                         <div class="quick-action-label">Enable Trivia</div>
                     </div>
                     <div class="quick-action-btn" onclick="toggleTrivia('off')">
-                        <div class="quick-action-icon">❌</div>
+                        <div class="quick-action-icon">&#x274C;</div>
                         <div class="quick-action-label">Disable Trivia</div>
                     </div>
                     <div class="quick-action-btn" onclick="postTriviaQuestion()">
-                        <div class="quick-action-icon">📝</div>
+                        <div class="quick-action-icon">&#x1F4DD;</div>
                         <div class="quick-action-label">Post Question Now</div>
                     </div>
                     <div class="quick-action-btn" onclick="viewTriviaScores()">
-                        <div class="quick-action-icon">🏆</div>
+                        <div class="quick-action-icon">&#x1F3C6;</div>
                         <div class="quick-action-label">View Leaderboard</div>
                     </div>
                 </div>
@@ -2601,7 +2598,7 @@ function generateDashboardHTML() {
             </div>
             
             <div class="card">
-                <h2>🎭 Mimic Mode (SECRET)</h2>
+                <h2>&#x1F3AD; Mimic Mode (SECRET)</h2>
                 <div id="mimicAlert" class="alert"></div>
                 <p style="color: var(--text-secondary); margin-bottom: 16px;">
                     Bot secretly copies everything a user says in main chat. They won't know!
@@ -2611,8 +2608,8 @@ function generateDashboardHTML() {
                     <input type="text" id="mimicUserId" placeholder="Enter user ID to mimic...">
                 </div>
                 <div style="display: flex; gap: 12px;">
-                    <button class="btn btn-warning" onclick="toggleMimic('on')">🎭 Start Mimicking</button>
-                    <button class="btn btn-secondary" onclick="toggleMimic('off')">🛑 Stop Mimic</button>
+                    <button class="btn btn-warning" onclick="toggleMimic('on')">&#x1F3AD; Start Mimicking</button>
+                    <button class="btn btn-secondary" onclick="toggleMimic('off')">&#x1F6D1; Stop Mimic</button>
                 </div>
                 <div id="mimicStatus" style="margin-top: 16px; padding: 12px; background: var(--bg-tertiary); border-radius: 8px; display: none;">
                     <div style="color: var(--text-secondary);">Currently mimicking:</div>
@@ -2621,7 +2618,7 @@ function generateDashboardHTML() {
             </div>
             
             <div class="card">
-                <h2>🔥 Roast Generator</h2>
+                <h2>&#x1F525; Roast Generator</h2>
                 <div id="roastAlert" class="alert"></div>
                 <p style="color: var(--text-secondary); margin-bottom: 16px;">
                     Roast someone publicly in main chat! 250 random roasts available.
@@ -2630,7 +2627,7 @@ function generateDashboardHTML() {
                     <label>Target User ID</label>
                     <input type="text" id="roastUserId" placeholder="Enter user ID to roast...">
                 </div>
-                <button class="btn btn-danger" onclick="roastUser()">🔥 Roast Them!</button>
+                <button class="btn btn-danger" onclick="roastUser()">&#x1F525; Roast Them!</button>
             </div>
         </div>
 
@@ -2652,7 +2649,7 @@ function generateDashboardHTML() {
     </div>
 
     <script>
-        let password = '';
+        var password = '';
         
         function login() {
             password = document.getElementById('loginPassword').value;
@@ -2660,9 +2657,9 @@ function generateDashboardHTML() {
                 showAlert('loginAlert', 'Please enter password', 'error');
                 return;
             }
-            fetch(\`/api/audit-log?password=\${password}\`)
-                .then(r => r.json())
-                .then(data => {
+            fetch('/api/audit-log?password=' + encodeURIComponent(password))
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
                     if (data.error) {
                         showAlert('loginAlert', 'Invalid password', 'error');
                     } else {
@@ -2672,7 +2669,7 @@ function generateDashboardHTML() {
                         loadAuditLog();
                     }
                 })
-                .catch(err => showAlert('loginAlert', 'Error: ' + err.message, 'error'));
+                .catch(function(err) { showAlert('loginAlert', 'Error: ' + err.message, 'error'); });
         }
         
         function logout() {
@@ -2683,8 +2680,8 @@ function generateDashboardHTML() {
         }
         
         function showTab(tabName) {
-            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(function(t) { t.classList.remove('active'); });
+            document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
             document.getElementById('tab-' + tabName).classList.add('active');
             event.target.classList.add('active');
             if (tabName === 'audit') loadAuditLog();
@@ -2694,44 +2691,43 @@ function generateDashboardHTML() {
         }
         
         function showAlert(id, message, type) {
-            const alert = document.getElementById(id);
+            var alert = document.getElementById(id);
             alert.textContent = message;
             alert.className = 'alert alert-' + type + ' show';
-            setTimeout(() => alert.classList.remove('show'), 5000);
+            setTimeout(function() { alert.classList.remove('show'); }, 5000);
         }
         
-        async function sendMessage() {
-            const message = document.getElementById('messageText').value;
+        function sendMessage() {
+            var message = document.getElementById('messageText').value;
             if (!message) return showAlert('messageAlert', 'Please enter a message', 'error');
-            try {
-                const res = await fetch('/api/send-message', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ password, message })
-                });
-                const data = await res.json();
+            fetch('/api/send-message', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: password, message: message })
+            })
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
                 if (data.success) {
                     showAlert('messageAlert', 'Message sent!', 'success');
                     document.getElementById('messageText').value = '';
                 } else {
                     showAlert('messageAlert', data.error || 'Error', 'error');
                 }
-            } catch (err) {
-                showAlert('messageAlert', 'Error: ' + err.message, 'error');
-            }
+            })
+            .catch(function(err) { showAlert('messageAlert', 'Error: ' + err.message, 'error'); });
         }
         
-        async function sendAnnouncement() {
-            const message = document.getElementById('announcementText').value;
-            const pingEveryone = document.getElementById('pingEveryone').checked;
+        function sendAnnouncement() {
+            var message = document.getElementById('announcementText').value;
+            var pingEveryone = document.getElementById('pingEveryone').checked;
             if (!message) return showAlert('announcementAlert', 'Please enter announcement', 'error');
-            try {
-                const res = await fetch('/api/send-announcement', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ password, message, pingEveryone })
-                });
-                const data = await res.json();
+            fetch('/api/send-announcement', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: password, message: message, pingEveryone: pingEveryone })
+            })
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
                 if (data.success) {
                     showAlert('announcementAlert', 'Announcement posted!', 'success');
                     document.getElementById('announcementText').value = '';
@@ -2739,180 +2735,168 @@ function generateDashboardHTML() {
                 } else {
                     showAlert('announcementAlert', data.error || 'Error', 'error');
                 }
-            } catch (err) {
-                showAlert('announcementAlert', 'Error: ' + err.message, 'error');
-            }
+            })
+            .catch(function(err) { showAlert('announcementAlert', 'Error: ' + err.message, 'error'); });
         }
         
-        async function searchUsers() {
-            const query = document.getElementById('userSearch').value;
+        function searchUsers() {
+            var query = document.getElementById('userSearch').value;
             if (!query) return showAlert('userAlert', 'Enter search term', 'error');
-            try {
-                const res = await fetch(\`/api/users/search?password=\${password}&query=\${encodeURIComponent(query)}\`);
-                const data = await res.json();
+            fetch('/api/users/search?password=' + encodeURIComponent(password) + '&query=' + encodeURIComponent(query))
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
                 if (data.error) return showAlert('userAlert', data.error, 'error');
-                const container = document.getElementById('userResults');
+                var container = document.getElementById('userResults');
                 if (data.users.length === 0) {
                     container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 20px;">No users found</p>';
                     return;
                 }
-                container.innerHTML = data.users.map(user => \`
-                    <div class="user-card">
-                        <img src="\${user.avatar}" class="user-avatar" alt="Avatar">
-                        <div class="user-info">
-                            <div class="user-tag">\${user.tag}</div>
-                            <div class="user-id">ID: \${user.id}</div>
-                            <div class="user-meta">
-                                <span class="user-meta-item">Joined: \${new Date(user.joinedAt).toLocaleDateString()}</span>
-                                <span class="user-meta-item">Account: \${new Date(user.accountCreatedAt).toLocaleDateString()}</span>
-                                <span class="user-meta-item \${user.timedOut ? 'text-warning' : ''}">\${user.timedOut ? '⏱️ Timed Out' : '✅ Active'}</span>
-                            </div>
-                            <div class="user-actions">
-                                <button class="btn btn-warning" onclick="timeoutUser('\${user.id}', '\${user.tag}')">Timeout</button>
-                                \${user.timedOut ? '<button class="btn btn-success" onclick="untimeoutUser(\\''+user.id+'\\', \\''+user.tag+'\\')">Remove Timeout</button>' : ''}
-                                <button class="btn btn-danger" onclick="kickUser('\${user.id}', '\${user.tag}')">Kick</button>
-                                <button class="btn btn-danger" onclick="banUser('\${user.id}', '\${user.tag}')">Ban</button>
-                            </div>
-                        </div>
-                    </div>
-                \`).join('');
-            } catch (err) {
-                showAlert('userAlert', 'Error: ' + err.message, 'error');
-            }
+                container.innerHTML = data.users.map(function(user) {
+                    return '<div class="user-card">' +
+                        '<img src="' + user.avatar + '" class="user-avatar" alt="Avatar">' +
+                        '<div class="user-info">' +
+                        '<div class="user-tag">' + user.tag + '</div>' +
+                        '<div class="user-id">ID: ' + user.id + '</div>' +
+                        '<div class="user-meta">' +
+                        '<span class="user-meta-item">Joined: ' + new Date(user.joinedAt).toLocaleDateString() + '</span>' +
+                        '<span class="user-meta-item">Account: ' + new Date(user.accountCreatedAt).toLocaleDateString() + '</span>' +
+                        '<span class="user-meta-item ' + (user.timedOut ? 'text-warning' : '') + '">' + (user.timedOut ? '&#x23F1; Timed Out' : '&#x2705; Active') + '</span>' +
+                        '</div>' +
+                        '<div class="user-actions">' +
+                        '<button class="btn btn-warning" onclick="timeoutUser(\'' + user.id + '\', \'' + user.tag + '\')">Timeout</button>' +
+                        (user.timedOut ? '<button class="btn btn-success" onclick="untimeoutUser(\'' + user.id + '\', \'' + user.tag + '\')">Remove Timeout</button>' : '') +
+                        '<button class="btn btn-danger" onclick="kickUser(\'' + user.id + '\', \'' + user.tag + '\')">Kick</button>' +
+                        '<button class="btn btn-danger" onclick="banUser(\'' + user.id + '\', \'' + user.tag + '\')">Ban</button>' +
+                        '</div></div></div>';
+                }).join('');
+            })
+            .catch(function(err) { showAlert('userAlert', 'Error: ' + err.message, 'error'); });
         }
         
-        async function timeoutUser(userId, tag) {
-            const duration = prompt('Timeout duration in minutes:', '60');
+        function timeoutUser(userId, tag) {
+            var duration = prompt('Timeout duration in minutes:', '60');
             if (!duration) return;
-            const reason = prompt('Reason (optional):', '');
-            try {
-                const res = await fetch('/api/users/action', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ password, userId, action: 'timeout', duration, reason })
-                });
-                const data = await res.json();
+            var reason = prompt('Reason (optional):', '');
+            fetch('/api/users/action', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: password, userId: userId, action: 'timeout', duration: duration, reason: reason })
+            })
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
                 if (data.success) {
-                    showAlert('userAlert', \`\${tag} timed out for \${duration} minutes\`, 'success');
+                    showAlert('userAlert', tag + ' timed out for ' + duration + ' minutes', 'success');
                     searchUsers();
                 } else {
                     showAlert('userAlert', data.error, 'error');
                 }
-            } catch (err) {
-                showAlert('userAlert', 'Error: ' + err.message, 'error');
-            }
+            })
+            .catch(function(err) { showAlert('userAlert', 'Error: ' + err.message, 'error'); });
         }
         
-        async function untimeoutUser(userId, tag) {
-            try {
-                const res = await fetch('/api/users/action', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ password, userId, action: 'untimeout' })
-                });
-                const data = await res.json();
+        function untimeoutUser(userId, tag) {
+            fetch('/api/users/action', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: password, userId: userId, action: 'untimeout' })
+            })
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
                 if (data.success) {
-                    showAlert('userAlert', \`\${tag} timeout removed\`, 'success');
+                    showAlert('userAlert', tag + ' timeout removed', 'success');
                     searchUsers();
                 } else {
                     showAlert('userAlert', data.error, 'error');
                 }
-            } catch (err) {
-                showAlert('userAlert', 'Error: ' + err.message, 'error');
-            }
+            })
+            .catch(function(err) { showAlert('userAlert', 'Error: ' + err.message, 'error'); });
         }
         
-        async function kickUser(userId, tag) {
-            if (!confirm(\`Kick \${tag}?\`)) return;
-            const reason = prompt('Reason (optional):', '');
-            try {
-                const res = await fetch('/api/users/action', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ password, userId, action: 'kick', reason })
-                });
-                const data = await res.json();
+        function kickUser(userId, tag) {
+            if (!confirm('Kick ' + tag + '?')) return;
+            var reason = prompt('Reason (optional):', '');
+            fetch('/api/users/action', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: password, userId: userId, action: 'kick', reason: reason })
+            })
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
                 if (data.success) {
-                    showAlert('userAlert', \`\${tag} kicked\`, 'success');
+                    showAlert('userAlert', tag + ' kicked', 'success');
                     searchUsers();
                 } else {
                     showAlert('userAlert', data.error, 'error');
                 }
-            } catch (err) {
-                showAlert('userAlert', 'Error: ' + err.message, 'error');
-            }
+            })
+            .catch(function(err) { showAlert('userAlert', 'Error: ' + err.message, 'error'); });
         }
         
-        async function banUser(userId, tag) {
-            if (!confirm(\`Ban \${tag}? This is permanent.\`)) return;
-            const reason = prompt('Reason (optional):', '');
-            try {
-                const res = await fetch('/api/users/action', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ password, userId, action: 'ban', reason })
-                });
-                const data = await res.json();
+        function banUser(userId, tag) {
+            if (!confirm('Ban ' + tag + '? This is permanent.')) return;
+            var reason = prompt('Reason (optional):', '');
+            fetch('/api/users/action', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: password, userId: userId, action: 'ban', reason: reason })
+            })
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
                 if (data.success) {
-                    showAlert('userAlert', \`\${tag} banned\`, 'success');
+                    showAlert('userAlert', tag + ' banned', 'success');
                     searchUsers();
                 } else {
                     showAlert('userAlert', data.error, 'error');
                 }
-            } catch (err) {
-                showAlert('userAlert', 'Error: ' + err.message, 'error');
-            }
+            })
+            .catch(function(err) { showAlert('userAlert', 'Error: ' + err.message, 'error'); });
         }
         
-        async function quickAction(action) {
-            try {
-                const res = await fetch('/api/quick-action', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ password, action })
-                });
-                const data = await res.json();
+        function quickAction(action) {
+            fetch('/api/quick-action', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: password, action: action })
+            })
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
                 if (data.success) {
                     showAlert('actionAlert', data.message || 'Action completed', 'success');
                     if (action === 'get-stats') displayStats(data.stats);
                 } else {
                     showAlert('actionAlert', data.error, 'error');
                 }
-            } catch (err) {
-                showAlert('actionAlert', 'Error: ' + err.message, 'error');
-            }
+            })
+            .catch(function(err) { showAlert('actionAlert', 'Error: ' + err.message, 'error'); });
         }
         
-        async function loadStats() {
-            try {
-                const res = await fetch('/api/quick-action', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ password, action: 'get-stats' })
-                });
-                const data = await res.json();
+        function loadStats() {
+            fetch('/api/quick-action', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: password, action: 'get-stats' })
+            })
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
                 if (data.success && data.stats) displayStats(data.stats);
-            } catch (err) {
-                console.error('Error loading stats:', err);
-            }
+            })
+            .catch(function(err) { console.error('Error loading stats:', err); });
         }
         
         function displayStats(stats) {
-            const container = document.getElementById('statsContainer');
-            const uptimeHours = Math.floor(stats.botUptime / 3600);
-            const uptimeMins = Math.floor((stats.botUptime % 3600) / 60);
-            container.innerHTML = \`
-                <div class="stat-card"><div class="stat-value">\${stats.totalMembers}</div><div class="stat-label">Total Members</div></div>
-                <div class="stat-card"><div class="stat-value">\${stats.onlineMembers}</div><div class="stat-label">Online Now</div></div>
-                <div class="stat-card"><div class="stat-value">\${stats.roles}</div><div class="stat-label">Roles</div></div>
-                <div class="stat-card"><div class="stat-value">\${stats.channels}</div><div class="stat-label">Channels</div></div>
-                <div class="stat-card"><div class="stat-value">\${stats.auditEntries}</div><div class="stat-label">Audit Entries</div></div>
-                <div class="stat-card"><div class="stat-value">\${uptimeHours}h \${uptimeMins}m</div><div class="stat-label">Bot Uptime</div></div>
-                <div class="stat-card"><div class="stat-value">\${stats.triviaEnabled ? '✅ ON' : '❌ OFF'}</div><div class="stat-label">Trivia System</div></div>
-                <div class="stat-card"><div class="stat-value">\${stats.mimicEnabled ? '🎭 ACTIVE' : '⚫ OFF'}</div><div class="stat-label">Mimic Mode</div></div>
-            \`;
+            var container = document.getElementById('statsContainer');
+            var uptimeHours = Math.floor(stats.botUptime / 3600);
+            var uptimeMins = Math.floor((stats.botUptime % 3600) / 60);
+            container.innerHTML =
+                '<div class="stat-card"><div class="stat-value">' + stats.totalMembers + '</div><div class="stat-label">Total Members</div></div>' +
+                '<div class="stat-card"><div class="stat-value">' + stats.onlineMembers + '</div><div class="stat-label">Online Now</div></div>' +
+                '<div class="stat-card"><div class="stat-value">' + stats.roles + '</div><div class="stat-label">Roles</div></div>' +
+                '<div class="stat-card"><div class="stat-value">' + stats.channels + '</div><div class="stat-label">Channels</div></div>' +
+                '<div class="stat-card"><div class="stat-value">' + stats.auditEntries + '</div><div class="stat-label">Audit Entries</div></div>' +
+                '<div class="stat-card"><div class="stat-value">' + uptimeHours + 'h ' + uptimeMins + 'm</div><div class="stat-label">Bot Uptime</div></div>' +
+                '<div class="stat-card"><div class="stat-value">' + (stats.triviaEnabled ? '&#x2705; ON' : '&#x274C; OFF') + '</div><div class="stat-label">Trivia System</div></div>' +
+                '<div class="stat-card"><div class="stat-value">' + (stats.mimicEnabled ? '&#x1F3AD; ACTIVE' : '&#x26AB; OFF') + '</div><div class="stat-label">Mimic Mode</div></div>';
             
-            // Update mimic status display
             if (stats.mimicEnabled && stats.mimicTarget) {
                 document.getElementById('mimicStatus').style.display = 'block';
                 document.getElementById('mimicTarget').textContent = stats.mimicTarget;
@@ -2921,237 +2905,195 @@ function generateDashboardHTML() {
             }
         }
         
-        async function loadAuditLog() {
-            try {
-                const res = await fetch(\`/api/audit-log?password=\${password}\`);
-                const data = await res.json();
+        function loadAuditLog() {
+            fetch('/api/audit-log?password=' + encodeURIComponent(password))
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
                 if (data.error) return;
-                const container = document.getElementById('auditLog');
+                var container = document.getElementById('auditLog');
                 if (data.logs.length === 0) {
                     container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 20px;">No audit entries</p>';
                     return;
                 }
-                container.innerHTML = data.logs.map(log => {
-                    const time = new Date(log.timestamp).toLocaleString();
-                    const severity = log.severity || 'info';
-                    return \`
-                        <div class="audit-entry \${severity}">
-                            <div class="audit-header">
-                                <span class="audit-action">\${log.action}</span>
-                                <span class="audit-time">\${time}</span>
-                            </div>
-                            <div class="audit-user">By: \${log.user}</div>
-                            <div class="audit-details">\${log.details}</div>
-                        </div>
-                    \`;
+                container.innerHTML = data.logs.map(function(log) {
+                    var time = new Date(log.timestamp).toLocaleString();
+                    var severity = log.severity || 'info';
+                    return '<div class="audit-entry ' + severity + '">' +
+                        '<div class="audit-header">' +
+                        '<span class="audit-action">' + log.action + '</span>' +
+                        '<span class="audit-time">' + time + '</span>' +
+                        '</div>' +
+                        '<div class="audit-user">By: ' + log.user + '</div>' +
+                        '<div class="audit-details">' + log.details + '</div>' +
+                        '</div>';
                 }).join('');
-            } catch (err) {
-                console.error('Error loading audit log:', err);
-            }
+            })
+            .catch(function(err) { console.error('Error loading audit log:', err); });
         }
         
-        async function loadRoles() {
-            try {
-                const res = await fetch(\`/api/roles?password=\${password}\`);
-                const data = await res.json();
+        function loadRoles() {
+            fetch('/api/roles?password=' + encodeURIComponent(password))
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
                 if (data.error) {
                     document.getElementById('rolesContainer').innerHTML = '<p style="color: var(--text-danger);">' + data.error + '</p>';
                     return;
                 }
-                const container = document.getElementById('rolesContainer');
+                var container = document.getElementById('rolesContainer');
                 if (!data.roles || data.roles.length === 0) {
                     container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 20px;">No roles found</p>';
                     return;
                 }
-                container.innerHTML = data.roles.map(role => \`
-                    <div class="role-item">
-                        <div class="role-header">
-                            <div class="role-name">
-                                <span class="role-badge" style="background-color: \${role.color}"></span>
-                                \${role.name}
-                            </div>
-                            <div class="role-members">\${role.members} members</div>
-                        </div>
-                        <div class="permissions-grid">
-                            \${Object.entries(role.permissions).map(([key, value]) => \`
-                                <div class="permission-item">
-                                    <span>\${value ? '✅' : '❌'}</span>
-                                    <span>\${formatPermissionName(key)}</span>
-                                </div>
-                            \`).join('')}
-                        </div>
-                    </div>
-                \`).join('');
-            } catch (err) {
-                console.error('Error loading roles:', err);
-            }
+                container.innerHTML = data.roles.map(function(role) {
+                    var permsHtml = Object.entries(role.permissions).map(function(entry) {
+                        return '<div class="permission-item"><span>' + (entry[1] ? '&#x2705;' : '&#x274C;') + '</span><span>' + formatPermissionName(entry[0]) + '</span></div>';
+                    }).join('');
+                    return '<div class="role-item">' +
+                        '<div class="role-header">' +
+                        '<div class="role-name"><span class="role-badge" style="background-color: ' + role.color + '"></span>' + role.name + '</div>' +
+                        '<div class="role-members">' + role.members + ' members</div>' +
+                        '</div>' +
+                        '<div class="permissions-grid">' + permsHtml + '</div>' +
+                        '</div>';
+                }).join('');
+            })
+            .catch(function(err) { console.error('Error loading roles:', err); });
         }
         
-        // Trivia Functions
-        async function toggleTrivia(action) {
-            try {
-                const res = await fetch('/api/quick-action', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ password, action: \`trivia-\${action}\` })
-                });
-                const data = await res.json();
+        function toggleTrivia(action) {
+            fetch('/api/quick-action', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: password, action: 'trivia-' + action })
+            })
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
                 if (data.success) {
                     showAlert('triviaAlert', data.message, 'success');
-                    loadStats(); // Refresh to show trivia status
+                    loadStats();
                 } else {
                     showAlert('triviaAlert', data.error, 'error');
                 }
-            } catch (err) {
-                showAlert('triviaAlert', 'Error: ' + err.message, 'error');
-            }
+            })
+            .catch(function(err) { showAlert('triviaAlert', 'Error: ' + err.message, 'error'); });
         }
         
-        async function postTriviaQuestion() {
-            try {
-                const res = await fetch('/api/quick-action', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ password, action: 'trivia-now' })
-                });
-                const data = await res.json();
+        function postTriviaQuestion() {
+            fetch('/api/quick-action', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: password, action: 'trivia-now' })
+            })
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
                 if (data.success) {
                     showAlert('triviaAlert', 'Trivia question posted to main chat!', 'success');
                 } else {
                     showAlert('triviaAlert', data.error, 'error');
                 }
-            } catch (err) {
-                showAlert('triviaAlert', 'Error: ' + err.message, 'error');
-            }
+            })
+            .catch(function(err) { showAlert('triviaAlert', 'Error: ' + err.message, 'error'); });
         }
         
-        async function viewTriviaScores() {
-            try {
-                const res = await fetch('/api/quick-action', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ password, action: 'trivia-scores' })
-                });
-                const data = await res.json();
+        function viewTriviaScores() {
+            fetch('/api/quick-action', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: password, action: 'trivia-scores' })
+            })
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
                 if (data.success && data.scores) {
-                    const container = document.getElementById('triviaScoresContainer');
+                    var container = document.getElementById('triviaScoresContainer');
                     if (data.scores.length === 0) {
                         container.innerHTML = '<p style="color: var(--text-muted); text-align: center;">No scores yet!</p>';
                         return;
                     }
-                    container.innerHTML = \`
-                        <div style="background: var(--bg-tertiary); border-radius: 8px; padding: 16px;">
-                            <h3 style="margin-bottom: 12px; color: var(--accent);">🏆 Leaderboard</h3>
-                            \${data.scores.map((entry, index) => {
-                                const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : (index + 1) + '.';
-                                return \\\`
-                                    <div style="display: flex; justify-content: space-between; padding: 8px; background: var(--bg-primary); border-radius: 6px; margin-bottom: 8px;">
-                                        <span>\${medal} \${entry.tag}</span>
-                                        <span style="color: var(--accent); font-weight: 600;">\${entry.score} pts</span>
-                                    </div>
-                                \\\`;
-                            }).join('')}
-                        </div>\`;
+                    container.innerHTML = '<div style="background: var(--bg-tertiary); border-radius: 8px; padding: 16px;">' +
+                        '<h3 style="margin-bottom: 12px; color: var(--accent);">&#x1F3C6; Leaderboard</h3>' +
+                        data.scores.map(function(entry, index) {
+                            var medal = index === 0 ? '&#x1F947;' : index === 1 ? '&#x1F948;' : index === 2 ? '&#x1F949;' : (index + 1) + '.';
+                            return '<div style="display: flex; justify-content: space-between; padding: 8px; background: var(--bg-primary); border-radius: 6px; margin-bottom: 8px;">' +
+                                '<span>' + medal + ' ' + entry.tag + '</span>' +
+                                '<span style="color: var(--accent); font-weight: 600;">' + entry.score + ' pts</span></div>';
+                        }).join('') +
+                        '</div>';
                 } else {
                     showAlert('triviaAlert', data.error || data.message, 'error');
                 }
-            } catch (err) {
-                showAlert('triviaAlert', 'Error: ' + err.message, 'error');
-            }
+            })
+            .catch(function(err) { showAlert('triviaAlert', 'Error: ' + err.message, 'error'); });
         }
         
-        // Mimic Functions
-        async function toggleMimic(action) {
-            try {
-                let body = { password, action: \`mimic-\${action}\` };
-                
-                if (action === 'on') {
-                    const userId = document.getElementById('mimicUserId').value;
-                    if (!userId) {
-                        showAlert('mimicAlert', 'Please enter a user ID', 'error');
-                        return;
-                    }
-                    body.userId = userId;
-                }
-                
-                const res = await fetch('/api/quick-action', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(body)
-                });
-                const data = await res.json();
-                if (data.success) {
-                    showAlert('mimicAlert', data.message, 'success');
-                    loadStats(); // Refresh to show mimic status
-                    if (action === 'off') {
-                        document.getElementById('mimicStatus').style.display = 'none';
-                        document.getElementById('mimicUserId').value = '';
-                    }
-                } else {
-                    showAlert('mimicAlert', data.error, 'error');
-                }
-            } catch (err) {
-                showAlert('mimicAlert', 'Error: ' + err.message, 'error');
-            }
-        }
-                
-                const res = await fetch('/api/quick-action', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(body)
-                });
-                const data = await res.json();
-                if (data.success) {
-                    showAlert('mimicAlert', data.message, 'success');
-                    loadStats(); // Refresh to show mimic status
-                    if (action === 'off') {
-                        document.getElementById('mimicStatus').style.display = 'none';
-                        document.getElementById('mimicUserId').value = '';
-                    }
-                } else {
-                    showAlert('mimicAlert', data.error, 'error');
-                }
-            } catch (err) {
-                showAlert('mimicAlert', 'Error: ' + err.message, 'error');
-            }
-        }
-        
-        // Roast Function
-        async function roastUser() {
-            try {
-                const userId = document.getElementById('roastUserId').value;
+        function toggleMimic(action) {
+            var body = { password: password, action: 'mimic-' + action };
+            
+            if (action === 'on') {
+                var userId = document.getElementById('mimicUserId').value;
                 if (!userId) {
-                    showAlert('roastAlert', 'Please enter a user ID', 'error');
+                    showAlert('mimicAlert', 'Please enter a user ID', 'error');
                     return;
                 }
-                
-                const res = await fetch('/api/quick-action', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ password, action: 'roast', userId })
-                });
-                const data = await res.json();
+                body.userId = userId;
+            }
+            
+            fetch('/api/quick-action', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            })
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
                 if (data.success) {
-                    showAlert('roastAlert', data.message + ' 🔥', 'success');
+                    showAlert('mimicAlert', data.message, 'success');
+                    loadStats();
+                    if (action === 'off') {
+                        document.getElementById('mimicStatus').style.display = 'none';
+                        document.getElementById('mimicUserId').value = '';
+                    }
+                } else {
+                    showAlert('mimicAlert', data.error, 'error');
+                }
+            })
+            .catch(function(err) { showAlert('mimicAlert', 'Error: ' + err.message, 'error'); });
+        }
+        
+        function roastUser() {
+            var userId = document.getElementById('roastUserId').value;
+            if (!userId) {
+                showAlert('roastAlert', 'Please enter a user ID', 'error');
+                return;
+            }
+            
+            fetch('/api/quick-action', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: password, action: 'roast', userId: userId })
+            })
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    showAlert('roastAlert', data.message + ' &#x1F525;', 'success');
                     document.getElementById('roastUserId').value = '';
                 } else {
                     showAlert('roastAlert', data.error, 'error');
                 }
-            } catch (err) {
-                showAlert('roastAlert', 'Error: ' + err.message, 'error');
-            }
+            })
+            .catch(function(err) { showAlert('roastAlert', 'Error: ' + err.message, 'error'); });
         }
         
         function formatPermissionName(key) {
-            return key.replace(/([A-Z])/g, ' $1').trim().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+            return key.replace(/([A-Z])/g, ' $1').trim().split(' ').map(function(word) {
+                return word.charAt(0).toUpperCase() + word.slice(1);
+            }).join(' ');
         }
         
-        setInterval(() => {
+        setInterval(function() {
             if (document.getElementById('tab-audit').classList.contains('active')) loadAuditLog();
         }, 10000);
         
-        document.addEventListener('DOMContentLoaded', () => {
-            document.getElementById('loginPassword').addEventListener('keypress', (e) => {
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('loginPassword').addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') login();
             });
         });

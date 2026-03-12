@@ -3063,7 +3063,7 @@ function generateDashboardHTML() {
         // Mimic Functions
         async function toggleMimic(action) {
             try {
-                let body = { password, action: `mimic-${action}` };
+                let body = { password, action: \`mimic-\${action}\` };
                 
                 if (action === 'on') {
                     const userId = document.getElementById('mimicUserId').value;
@@ -3073,6 +3073,27 @@ function generateDashboardHTML() {
                     }
                     body.userId = userId;
                 }
+                
+                const res = await fetch('/api/quick-action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showAlert('mimicAlert', data.message, 'success');
+                    loadStats(); // Refresh to show mimic status
+                    if (action === 'off') {
+                        document.getElementById('mimicStatus').style.display = 'none';
+                        document.getElementById('mimicUserId').value = '';
+                    }
+                } else {
+                    showAlert('mimicAlert', data.error, 'error');
+                }
+            } catch (err) {
+                showAlert('mimicAlert', 'Error: ' + err.message, 'error');
+            }
+        }
                 
                 const res = await fetch('/api/quick-action', {
                     method: 'POST',

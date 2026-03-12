@@ -1819,7 +1819,6 @@ function generateDashboardHTML() {
             </div>
         </div>
 
-        <!-- Fun Features Tab -->
         <div id="tab-fun" class="tab-content">
             <div class="card">
                 <h2>🧠 Trivia System</h2>
@@ -2228,7 +2227,7 @@ function generateDashboardHTML() {
                 const res = await fetch('/api/quick-action', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ password, action: `trivia-${action}` })
+                    body: JSON.stringify({ password, action: \`trivia-\${action}\` })
                 });
                 const data = await res.json();
                 if (data.success) {
@@ -2274,20 +2273,20 @@ function generateDashboardHTML() {
                         container.innerHTML = '<p style="color: var(--text-muted); text-align: center;">No scores yet!</p>';
                         return;
                     }
-                    container.innerHTML = `
+                    container.innerHTML = \`
                         <div style="background: var(--bg-tertiary); border-radius: 8px; padding: 16px;">
                             <h3 style="margin-bottom: 12px; color: var(--accent);">🏆 Leaderboard</h3>
-                            ${data.scores.map((entry, index) => {
+                            \${data.scores.map((entry, index) => {
                                 const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : (index + 1) + '.';
-                                return `
+                                return \`
                                     <div style="display: flex; justify-content: space-between; padding: 8px; background: var(--bg-primary); border-radius: 6px; margin-bottom: 8px;">
-                                        <span>${medal} ${entry.tag}</span>
-                                        <span style="color: var(--accent); font-weight: 600;">${entry.score} pts</span>
+                                        <span>\${medal} \${entry.tag}</span>
+                                        <span style="color: var(--accent); font-weight: 600;">\${entry.score} pts</span>
                                     </div>
-                                `;
+                                \`;
                             }).join('')}
                         </div>
-                    `;
+                    \`;
                 } else {
                     showAlert('triviaAlert', data.error || data.message, 'error');
                 }
@@ -2299,7 +2298,7 @@ function generateDashboardHTML() {
         // Mimic Functions
         async function toggleMimic(action) {
             try {
-                let body = { password, action: `mimic-${action}` };
+                let body = { password, action: \`mimic-\${action}\` };
                 
                 if (action === 'on') {
                     const userId = document.getElementById('mimicUserId').value;

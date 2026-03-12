@@ -2994,7 +2994,7 @@ function generateDashboardHTML() {
                 const res = await fetch('/api/quick-action', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ password, action: `trivia-${action}` })
+                    body: JSON.stringify({ password, action: \`trivia-\${action}\` })
                 });
                 const data = await res.json();
                 if (data.success) {

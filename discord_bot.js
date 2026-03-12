@@ -2763,10 +2763,10 @@ function generateDashboardHTML() {
                         '<span class="user-meta-item ' + (user.timedOut ? 'text-warning' : '') + '">' + (user.timedOut ? '&#x23F1; Timed Out' : '&#x2705; Active') + '</span>' +
                         '</div>' +
                         '<div class="user-actions">' +
-                        '<button class="btn btn-warning" onclick="timeoutUser(\'' + user.id + '\', \'' + user.tag + '\')">Timeout</button>' +
-                        (user.timedOut ? '<button class="btn btn-success" onclick="untimeoutUser(\'' + user.id + '\', \'' + user.tag + '\')">Remove Timeout</button>' : '') +
-                        '<button class="btn btn-danger" onclick="kickUser(\'' + user.id + '\', \'' + user.tag + '\')">Kick</button>' +
-                        '<button class="btn btn-danger" onclick="banUser(\'' + user.id + '\', \'' + user.tag + '\')">Ban</button>' +
+                        '<button class="btn btn-warning" onclick="timeoutUser(&#39;' + user.id + '&#39;, &#39;' + user.tag + '&#39;)">Timeout</button>' +
+                        (user.timedOut ? '<button class="btn btn-success" onclick="untimeoutUser(&#39;' + user.id + '&#39;, &#39;' + user.tag + '&#39;)">Remove Timeout</button>' : '') +
+                        '<button class="btn btn-danger" onclick="kickUser(&#39;' + user.id + '&#39;, &#39;' + user.tag + '&#39;)">Kick</button>' +
+                        '<button class="btn btn-danger" onclick="banUser(&#39;' + user.id + '&#39;, &#39;' + user.tag + '&#39;)">Ban</button>' +
                         '</div></div></div>';
                 }).join('');
             })
